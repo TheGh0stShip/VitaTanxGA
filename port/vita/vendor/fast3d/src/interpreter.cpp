@@ -5505,6 +5505,7 @@ bool Interpreter::ViewportMatchesRendererResolution() {
 }
 
 void Interpreter::StartFrame() {
+    mFrameHasWork = false;
     mWapi->GetDimensions(&mGfxCurrentWindowDimensions.width, &mGfxCurrentWindowDimensions.height, &mCurWindowPosX,
                          &mCurWindowPosY);
     if (mCurDimensions.height == 0) {
@@ -5563,7 +5564,10 @@ void Interpreter::RunGuiOnly() {
                                        false, true, true, !mRendersToFb);
     mRapi->StartFrame();
     mRapi->StartDrawToFramebuffer(mRendersToFb ? mGameFb : 0, (float)mCurDimensions.height / mNativeDimensions.height);
-    mRapi->ClearFramebuffer(true, true);
+    if (!mFrameHasWork) {
+        mRapi->ClearFramebuffer(true, true);
+        mFrameHasWork = true;
+    }
     mRdp->viewport_or_scissor_changed = true;
     mRenderingState.viewport = {};
     mRenderingState.scissor = {};
@@ -5596,7 +5600,14 @@ void Interpreter::Run(Gfx* commands, const robin_hood::unordered_map<Mtx*, MtxF>
                                        false, true, true, !mRendersToFb);
     mRapi->StartFrame();
     mRapi->StartDrawToFramebuffer(mRendersToFb ? mGameFb : 0, (float)mCurDimensions.height / mNativeDimensions.height);
-    mRapi->ClearFramebuffer(true, true);
+    // An N64 frame can contain several OSTask display lists. The runtime calls
+    // Run for each task but StartFrame only once per VI frame, so clearing here
+    // unconditionally erased geometry produced by earlier tasks (typically
+    // leaving only the final HUD pass or an empty black pass).
+    if (!mFrameHasWork) {
+        mRapi->ClearFramebuffer(true, true);
+        mFrameHasWork = true;
+    }
     mRdp->viewport_or_scissor_changed = true;
     mRenderingState.viewport = {};
     mRenderingState.scissor = {};

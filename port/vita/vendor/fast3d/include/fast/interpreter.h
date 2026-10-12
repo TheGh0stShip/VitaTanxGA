@@ -593,6 +593,7 @@ class Interpreter {
 	float mCurAspectRatioDeltaForX = (4.f / 3.f);
 
     bool mDroppedFrame{};
+    bool mFrameHasWork{};
     float* mBufVbo; // 3 vertices in a triangle and 32 floats per vtx
     size_t mBufVboLen{};
     size_t mBufVboNumTris{};
