@@ -15,8 +15,9 @@ static uint16_t read_be_u16(const uint8_t *bytes) {
 
 static bool renderable_kind(uint8_t kind) {
     switch (kind) {
-        case 0: case 1: case 2: case 11: case 14: case 20: case 22:
-        case 29: case 34: case 35: case 40: case 42: case 43: case 44:
+        case 0: case 1: case 2: case 3: case 4: case 5: case 10:
+        case 11: case 14: case 20: case 21: case 22: case 24: case 29:
+        case 31: case 34: case 35: case 40: case 42: case 43: case 44:
             return true;
         default:
             return false;
@@ -83,10 +84,13 @@ bool btga_model_visit(const BtgaWorldComponents *world, uint16_t model_index,
     return context.accepted && context.count != 0;
 }
 
-bool btga_scene_visit(const BtgaWorldComponents *world,
-                      const uint8_t *geometry_pool, size_t geometry_pool_size,
-                      uint32_t triangle_limit, BtgaPlacedTriangleVisitor visitor,
-                      void *visitor_context, BtgaSceneSummary *summary) {
+bool btga_scene_visit_near(const BtgaWorldComponents *world,
+                           const uint8_t *geometry_pool,
+                           size_t geometry_pool_size, float center_x,
+                           float center_z, float radius,
+                           uint32_t triangle_limit,
+                           BtgaPlacedTriangleVisitor visitor,
+                           void *visitor_context, BtgaSceneSummary *summary) {
     BtgaWorldSummary world_summary;
     SceneVisitContext context = {
         .visitor = visitor,
@@ -112,13 +116,18 @@ bool btga_scene_visit(const BtgaWorldComponents *world,
             world->definitions_size - definition_offset < 4) continue;
         definition = world->definitions + definition_offset;
         if (!renderable_kind(definition[0])) continue;
-        model_index = read_be_u16(definition + 2);
-        if (model_index >= world_summary.model_count) return false;
-        model = world->models + model_index * 16;
         context.placed.placement_x = (int16_t)read_be_u16(placement);
         context.placed.placement_y = (int16_t)read_be_u16(placement + 2);
         context.placed.placement_z = (int16_t)read_be_u16(placement + 4);
         context.placed.placement_yaw = read_be_u16(placement + 6);
+        if (radius > 0.0f) {
+            float dx = context.placed.placement_x - center_x;
+            float dz = context.placed.placement_z - center_z;
+            if (dx * dx + dz * dz > radius * radius) continue;
+        }
+        model_index = read_be_u16(definition + 2);
+        if (model_index >= world_summary.model_count) return false;
+        model = world->models + model_index * 16;
         for (part_index = read_be_u16(model + 2);
              part_index < (uint32_t)read_be_u16(model + 2) + model[0] &&
              context.count < context.limit && context.accepted; part_index++) {
@@ -144,4 +153,13 @@ bool btga_scene_visit(const BtgaWorldComponents *world,
     }
     summary->visited_triangle_count = context.count;
     return context.accepted && context.count != 0;
+}
+
+bool btga_scene_visit(const BtgaWorldComponents *world,
+                      const uint8_t *geometry_pool, size_t geometry_pool_size,
+                      uint32_t triangle_limit, BtgaPlacedTriangleVisitor visitor,
+                      void *visitor_context, BtgaSceneSummary *summary) {
+    return btga_scene_visit_near(world, geometry_pool, geometry_pool_size,
+                                 0.0f, 0.0f, 0.0f, triangle_limit, visitor,
+                                 visitor_context, summary);
 }

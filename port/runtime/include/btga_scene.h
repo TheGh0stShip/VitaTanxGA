@@ -28,6 +28,13 @@ bool btga_scene_visit(const BtgaWorldComponents *world,
                       const uint8_t *geometry_pool, size_t geometry_pool_size,
                       uint32_t triangle_limit, BtgaPlacedTriangleVisitor visitor,
                       void *context, BtgaSceneSummary *summary);
+bool btga_scene_visit_near(const BtgaWorldComponents *world,
+                           const uint8_t *geometry_pool,
+                           size_t geometry_pool_size, float center_x,
+                           float center_z, float radius,
+                           uint32_t triangle_limit,
+                           BtgaPlacedTriangleVisitor visitor, void *context,
+                           BtgaSceneSummary *summary);
 bool btga_model_visit(const BtgaWorldComponents *world, uint16_t model_index,
                       uint8_t part_ordinal,
                       float x, float y, float z, uint16_t yaw,

@@ -44,12 +44,17 @@ placement/model/part/reference graph. It decodes the paired state and texture
 commands, including N64 tile origins, coordinate shifts, and sampling modes;
 uploads native Vita textures; applies recovered material and distance
 modulation; and separates alpha surfaces from opaque depth writes. The full
-6,303-triangle placed scene is rendered with a 37-degree perspective camera
+7,030-triangle base scene plus 506 companion-world actor triangles are
+rendered with a 37-degree perspective camera
 and GXM depth testing.
 The actor-world loader also distinguishes the retail entry-30 navigation/event
 modes from its mode-1/mode-2 blocking volumes. Those signed big-endian local
 bounds retain their placement yaw and stop player/AI tanks without globally
 packing or casting the recovered records.
+Renderable actor entry kinds are traversed from the companion world alongside
+the base scene. Initial models for recovered dynamic structures are visible,
+while a placement-radius gate prevents later campaign maps with thousands of
+actor records from exhausting the fixed Vita projection buffers.
 
 Portable gameplay state currently covers tank movement,
 terrain following, turret aim, primary and recovered per-class secondary fire,
@@ -118,8 +123,9 @@ mission streams remains to be connected to their runtime consumers.
 
 `make vita-check` tests the portable loaders against synthetic malformed
 inputs and all 277 geometry/state references plus all 275 textured references
-in the extracted SF Airport data. The placed scene gate covers 710 renderable
-placements and 6,303 triangles. The gate additionally validates mission zero's
+in the extracted SF Airport data. The placed scene gate covers 726 renderable
+base placements/7,030 triangles and 45 actor placements/506 triangles. The
+gate additionally validates mission zero's
 level 26, mode 8, and three tank-kind-4 AI entries, plus all 23,483 commands in the extracted first
 campaign script and executes the opening stream to its terminator while
 requiring all seven retail text events. It also checks the extracted campaign

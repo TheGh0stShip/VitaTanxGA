@@ -71,7 +71,7 @@ enum { kMaximumCollisions = 128 };
 static BtgaWorldCollision s_collisions[kMaximumCollisions];
 static size_t s_collision_count;
 
-enum { kMaximumProjectedTriangles = 8192, kMaximumTextureCache = 256 };
+enum { kMaximumProjectedTriangles = 16384, kMaximumTextureCache = 384 };
 
 typedef struct CachedTexture {
     uint32_t texture_offset;
@@ -264,11 +264,11 @@ static bool cache_texture(uint32_t texture_offset, uint32_t texture_size,
     return true;
 }
 
-static bool build_texture_cache(void) {
-    uint32_t reference_count = (uint32_t)(s_world_components.references_size / 24);
+static bool build_texture_cache(const BtgaWorldComponents *world) {
+    uint32_t reference_count = (uint32_t)(world->references_size / 24);
     uint32_t index;
     for (index = 0; index < reference_count; index++) {
-        const uint8_t *reference = s_world_components.references + index * 24;
+        const uint8_t *reference = world->references + index * 24;
         if (!cache_texture(btga_read_be_u32(reference + 16),
                            btga_read_be_u32(reference + 20),
                            btga_read_be_u32(reference + 8),
@@ -615,7 +615,8 @@ static bool load_mission_world(uint8_t mission) {
         valid = btga_world_bounds(&s_world_components, &bounds) &&
                 btga_terrain_build(&s_world_components, s_geometry_pool.data,
                                    s_geometry_pool.size, &bounds, &s_terrain) &&
-                build_texture_cache() &&
+                build_texture_cache(&s_world_components) &&
+                build_texture_cache(&s_spawn_components) &&
                 load_projectile_textures() &&
                 btga_campaign_mission_config(s_campaign_config_file.data,
                                              s_campaign_config_file.size, mission,
@@ -912,6 +913,7 @@ static void queue_projectile_billboard(DrawSceneContext *draw,
 static uint32_t draw_world(const BtgaRuntime *runtime) {
     DrawSceneContext draw = {0};
     BtgaSceneSummary scene;
+    BtgaSceneSummary actor_scene;
     uint32_t tank_triangles;
     uint32_t tank_part;
     uint32_t enemy_index;
@@ -992,11 +994,17 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
     }
     draw.actor = false;
     if (draw.count >= kMaximumProjectedTriangles) return draw.count;
-    if (!btga_scene_visit(&s_world_components, s_geometry_pool.data,
-                          s_geometry_pool.size,
-                          kMaximumProjectedTriangles - draw.count,
-                          draw_world_triangle,
-                          &draw, &scene)) return 0;
+    (void)btga_scene_visit_near(&s_world_components, s_geometry_pool.data,
+                                s_geometry_pool.size, runtime->camera.x,
+                                runtime->camera.z, 5000.0f,
+                                kMaximumProjectedTriangles - draw.count,
+                                draw_world_triangle, &draw, &scene);
+    if (draw.count < kMaximumProjectedTriangles)
+        (void)btga_scene_visit_near(&s_spawn_components, s_geometry_pool.data,
+                                    s_geometry_pool.size, runtime->camera.x,
+                                    runtime->camera.z, 5000.0f,
+                                    kMaximumProjectedTriangles - draw.count,
+                                    draw_world_triangle, &draw, &actor_scene);
     qsort(s_projected_triangles, draw.count, sizeof(s_projected_triangles[0]),
           compare_triangle_depth);
     triangle_index = 0;

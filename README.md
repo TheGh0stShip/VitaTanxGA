@@ -43,6 +43,9 @@ The repository currently produces an installable PS Vita VPK that:
   with retail health, ammunition, weapon inventory, tank-buck, and radar effects;
 - derives navigation heights from the placed retail level geometry;
 - loads and validates extracted big-endian world component tables;
+- renders nearby recovered actor-world props, structures, and initial dynamic
+  object models in addition to the base terrain world, with placement culling
+  sized for Vita memory;
 - packages the campaign worlds, shared world pools, projectile
   sprites, the decoded SFX bank, mission scripts, and original campaign
   text/configuration tables;

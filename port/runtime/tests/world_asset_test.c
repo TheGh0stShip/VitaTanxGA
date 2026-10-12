@@ -65,6 +65,7 @@ int main(int argc, char **argv) {
     uint32_t shifted_textures = 0;
     uint32_t offset_textures = 0;
     BtgaSceneSummary scene_summary;
+    BtgaSceneSummary actor_scene_summary;
     BtgaWorldBounds world_bounds;
     BtgaTerrain terrain;
     BtgaWorldComponents common_components;
@@ -73,6 +74,8 @@ int main(int argc, char **argv) {
     uint16_t tank_model_index;
     uint32_t tank_triangles;
     BtgaTankDefinition enemy_tank;
+    BtgaWorldCollision collisions[128];
+    size_t collision_count;
     int result = 1;
 
     if (argc != 11) {
@@ -323,11 +326,26 @@ int main(int argc, char **argv) {
         fprintf(stderr, "placed scene traversal failed\n");
         goto cleanup;
     }
+    if (!btga_scene_visit(&spawn_components, geometry.data, geometry.size,
+                          100000, NULL, NULL, &actor_scene_summary) ||
+        !btga_world_collisions(&spawn_components, collisions,
+                               sizeof(collisions) / sizeof(collisions[0]),
+                               &collision_count)) {
+        fprintf(stderr, "actor scene traversal failed\n");
+        goto cleanup;
+    }
+    printf("actor scene traversed: %u placements, %u triangles, "
+           "%zu blocking bounds\n",
+           actor_scene_summary.renderable_placement_count,
+           actor_scene_summary.visited_triangle_count, collision_count);
     printf("scene traversed: %u placements, %u triangles\n",
            scene_summary.renderable_placement_count,
            scene_summary.visited_triangle_count);
-    if (scene_summary.renderable_placement_count != 710 ||
-        scene_summary.visited_triangle_count != 6303) {
+    if (scene_summary.renderable_placement_count != 726 ||
+        scene_summary.visited_triangle_count != 7030 ||
+        actor_scene_summary.renderable_placement_count != 45 ||
+        actor_scene_summary.visited_triangle_count != 506 ||
+        collision_count != 0) {
         fprintf(stderr, "placed scene totals disagree with the verified corpus\n");
         goto cleanup;
     }
