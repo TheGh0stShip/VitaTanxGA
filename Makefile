@@ -3,7 +3,7 @@ ROM ?= baseroms/us/baserom.z64
 VITA_ASSETS := assets/extracted/us/vita
 VITA_BUILD := port/vita/build
 
-.PHONY: all verify-rom runtime-test runtime-asset-test runtime-script-asset-test runtime-campaign-asset-test vita-assets vita vita-recomp-bootstrap vita-recomp-prepare vita-recomp-check vita-check clean
+.PHONY: all verify-rom runtime-test runtime-asset-test runtime-script-asset-test runtime-campaign-asset-test vita-assets vita vita-recomp-bootstrap vita-recomp-prepare vita-recomp-check vita-recomp-runtime-check vita-check clean
 
 all: vita-check
 
@@ -115,6 +115,28 @@ vita-recomp-check: vita-recomp-prepare
 			grep -q 'Tag_ABI_VFP_args: VFP registers' || exit 1; \
 	done
 	@echo "Verified all translated objects as ELF32 ARMv7 hard-float"
+
+vita-recomp-runtime-check: vita-recomp-prepare
+	cmake -S port/vita -B $(VITA_BUILD)-runtime \
+		-DBTGA_BUILD_RECOMP=ON -DBTGA_BUILD_RECOMP_RUNTIME=ON
+	cmake --build $(VITA_BUILD)-runtime --target btga_vita_recomp_runtime
+	@for archive in \
+		$(VITA_BUILD)-runtime/libbtga_recompiled_game_armv7.a \
+		$(VITA_BUILD)-runtime/libbtga_vita_recomp_runtime.a; do \
+		test -s $$archive || exit 1; \
+	done
+	@for object in $$(find $(VITA_BUILD)-runtime/CMakeFiles/btga_vita_recomp_runtime.dir \
+		-name '*.obj' -type f); do \
+		$(VITASDK)/bin/arm-vita-eabi-readelf -h "$$object" | \
+			grep -q 'Class:.*ELF32' || exit 1; \
+		$(VITASDK)/bin/arm-vita-eabi-readelf -h "$$object" | \
+			grep -q 'Machine:.*ARM' || exit 1; \
+		$(VITASDK)/bin/arm-vita-eabi-readelf -A "$$object" | \
+			grep -q 'Tag_CPU_arch: v7' || exit 1; \
+		$(VITASDK)/bin/arm-vita-eabi-readelf -A "$$object" | \
+			grep -q 'Tag_ABI_VFP_args: VFP registers' || exit 1; \
+	done
+	@echo "Compiled translated game, audio microcode, and Vita runtime services for ARMv7"
 
 vita-check: runtime-test runtime-asset-test runtime-script-asset-test runtime-campaign-asset-test vita
 	port/vita/verify_elf.sh $(VITA_BUILD)/vitatanxga \

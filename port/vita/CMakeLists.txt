@@ -11,10 +11,11 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
   endif()
 endif()
 
-project(vitatanxga C)
+project(vitatanxga C CXX)
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 
 option(BTGA_BUILD_RECOMP "ARM compile-check locally generated full-game translation" OFF)
+option(BTGA_BUILD_RECOMP_RUNTIME "Compile the Vita N64 runtime integration" OFF)
 
 set(VITA_APP_NAME "VitaTanx GA")
 # Reserved for this homebrew port; change only before distributing a build.
@@ -94,6 +95,63 @@ if(BTGA_BUILD_RECOMP)
     -fno-strict-aliasing -Wno-unused-variable
     "-include${BTGA_RECOMP_ROOT}/runtime_compat.h"
   )
+
+  if(BTGA_BUILD_RECOMP_RUNTIME)
+    set(BTGA_N64_RUNTIME_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../.deps/N64ModernRuntime")
+    set(BTGA_ULTRAMODERN "${BTGA_N64_RUNTIME_ROOT}/ultramodern")
+    set(BTGA_LIBRECOMP "${BTGA_N64_RUNTIME_ROOT}/librecomp")
+    add_library(btga_vita_recomp_runtime STATIC
+      ${BTGA_ULTRAMODERN}/src/audio.cpp
+      ${BTGA_ULTRAMODERN}/src/error_handling.cpp
+      ${BTGA_ULTRAMODERN}/src/events.cpp
+      ${BTGA_ULTRAMODERN}/src/extensions.cpp
+      ${BTGA_ULTRAMODERN}/src/input.cpp
+      ${BTGA_ULTRAMODERN}/src/mesgqueue.cpp
+      ${BTGA_ULTRAMODERN}/src/misc_ultra.cpp
+      ${BTGA_ULTRAMODERN}/src/renderer_context.cpp
+      ${BTGA_ULTRAMODERN}/src/rsp.cpp
+      ${BTGA_ULTRAMODERN}/src/scheduling.cpp
+      ${BTGA_ULTRAMODERN}/src/task_win32.cpp
+      ${BTGA_ULTRAMODERN}/src/threadqueue.cpp
+      ${BTGA_ULTRAMODERN}/src/threads.cpp
+      ${BTGA_ULTRAMODERN}/src/timer.cpp
+      ${BTGA_ULTRAMODERN}/src/ultrainit.cpp
+      ${BTGA_LIBRECOMP}/src/ai.cpp
+      ${BTGA_LIBRECOMP}/src/cont.cpp
+      ${BTGA_LIBRECOMP}/src/dp.cpp
+      ${BTGA_LIBRECOMP}/src/math_routines.cpp
+      ${BTGA_LIBRECOMP}/src/pak.cpp
+      ${BTGA_LIBRECOMP}/src/pi.cpp
+      ${BTGA_LIBRECOMP}/src/rsp.cpp
+      ${BTGA_LIBRECOMP}/src/sp.cpp
+      ${BTGA_LIBRECOMP}/src/ultra_translation.cpp
+      ${BTGA_LIBRECOMP}/src/vi.cpp
+      ${BTGA_RECOMP_ROOT}/generated/n_aspMain.cpp
+      recomp/vita_recomp_lookup.cpp
+      recomp/vita_runtime_compat.cpp
+      recomp/vita_runtime_patches.cpp
+    )
+    target_compile_features(btga_vita_recomp_runtime PRIVATE cxx_std_20)
+    target_include_directories(btga_vita_recomp_runtime PRIVATE
+      "${BTGA_RECOMP_DIR}"
+      "${BTGA_RECOMP_ROOT}"
+      "${BTGA_RECOMP_ROOT}/generated/include"
+      "${BTGA_RECOMP_INCLUDE}"
+      "${BTGA_LIBRECOMP}/include"
+      "${BTGA_LIBRECOMP}/include/librecomp"
+      "${BTGA_LIBRECOMP}/src"
+      "${BTGA_ULTRAMODERN}/include"
+      "${BTGA_N64_RUNTIME_ROOT}/thirdparty"
+      "${BTGA_N64_RUNTIME_ROOT}/thirdparty/concurrentqueue"
+      "${BTGA_N64_RUNTIME_ROOT}/thirdparty/sse2neon"
+    )
+    target_compile_options(btga_vita_recomp_runtime PRIVATE
+      -fno-strict-aliasing -Wno-unused-parameter -Wno-unused-variable
+    )
+    target_link_libraries(btga_vita_recomp_runtime PUBLIC
+      btga_recompiled_game_armv7
+    )
+  endif()
 endif()
 
 vita_create_self(${PROJECT_NAME}.self ${PROJECT_NAME})

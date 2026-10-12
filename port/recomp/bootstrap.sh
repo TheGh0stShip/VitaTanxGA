@@ -23,3 +23,5 @@ fi
 git -C "$runtime_root" fetch --depth 1 origin "$runtime_commit"
 git -C "$runtime_root" checkout --detach "$runtime_commit"
 git -C "$runtime_root" submodule update --init --recursive
+git -C "$runtime_root" reset --hard "$runtime_commit"
+git -C "$runtime_root" apply "$root/port/recomp/patches/n64modernruntime-vita.patch"

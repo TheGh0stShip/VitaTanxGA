@@ -6,8 +6,7 @@
 *.velf
 *.psp2dmp
 assets/extracted/
-port/vita/build/
-port/vita/build-recomp/
+port/vita/build*/
 port/recomp/generated/
 port/recomp/input/
 .deps/
