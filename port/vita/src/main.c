@@ -45,6 +45,11 @@ static void configure_mission(BtgaRuntime *runtime) {
             btga_runtime_add_pickup(runtime, pickup.x, pickup.y, pickup.z,
                                     pickup.kind);
     }
+    {
+        BtgaWorldObject object;
+        for (index = 0; vita_platform_mission_object(index, &object); index++)
+            btga_runtime_add_mission_object(runtime, &object);
+    }
 }
 
 int main(void) {

@@ -53,6 +53,17 @@ int main(void) {
     assert(btga_runtime_add_pickup(&runtime, 0.0f, 0.0f, 576.0f, 1));
     assert(btga_runtime_add_pickup(&runtime, 0.0f, 0.0f, 576.0f, 11));
     assert(btga_runtime_add_pickup(&runtime, 0.0f, 0.0f, 576.0f, 4));
+    {
+        BtgaWorldObject object = {
+            .x = 100, .y = 0, .z = 100,
+            .min_x = -50, .min_y = -20, .min_z = -50,
+            .max_x = 50, .max_y = 80, .max_z = 50,
+            .kind = 21, .mission_type = 1,
+        };
+        assert(btga_runtime_add_mission_object(&runtime, &object));
+        assert(btga_runtime_active_objectives(&runtime) == 1);
+        assert(runtime.mission_objects[0].health == 100);
+    }
     runtime.enemies[0].x = 50.0f;
     runtime.enemies[0].health = 25;
 
@@ -68,6 +79,8 @@ int main(void) {
     assert(runtime.screen == BTGA_SCREEN_INTRO);
     assert(runtime.enemies[0].x == 100.0f && runtime.enemies[0].health == 100);
     assert(runtime.enemies[0].turret_yaw == 0.0f);
+    assert(runtime.mission_objects[0].active &&
+           runtime.mission_objects[0].health == 100);
     input.pressed = BTGA_BUTTON_CANCEL;
     btga_runtime_update(&runtime, &input, 0);
     assert(runtime.screen == BTGA_SCREEN_BRIEFING);

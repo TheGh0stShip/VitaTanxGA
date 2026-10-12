@@ -67,6 +67,10 @@ enum { kMaximumPickups = BTGA_MAX_PICKUPS };
 static BtgaWorldPickup s_pickups[kMaximumPickups];
 static uint16_t s_pickup_model_indices[kMaximumPickups];
 static size_t s_pickup_count;
+enum { kMaximumMissionObjects = BTGA_MAX_MISSION_OBJECTS };
+static BtgaWorldObject s_mission_objects[kMaximumMissionObjects];
+static bool s_mission_object_actor[kMaximumMissionObjects];
+static size_t s_mission_object_count;
 enum { kMaximumCollisions = 2048 };
 static BtgaWorldCollision s_collisions[kMaximumCollisions];
 static size_t s_collision_count;
@@ -642,6 +646,24 @@ static bool load_mission_world(uint8_t mission) {
         valid = valid && btga_world_pickups(&s_spawn_components, s_pickups,
                                             kMaximumPickups, &s_pickup_count);
         if (valid) {
+            size_t world_object_count = 0;
+            size_t spawn_object_count = 0;
+            valid = btga_world_objects(&s_world_components, s_mission_objects,
+                        kMaximumMissionObjects, &world_object_count) &&
+                    btga_world_objects(&s_spawn_components,
+                        s_mission_objects + world_object_count,
+                        kMaximumMissionObjects - world_object_count,
+                        &spawn_object_count);
+            s_mission_object_count = world_object_count + spawn_object_count;
+            for (index = 0; valid && index < s_mission_object_count; index++) {
+                s_mission_object_actor[index] = index >= world_object_count;
+                valid = cache_entire_model_textures(
+                    s_mission_object_actor[index] ? &s_spawn_components :
+                                                    &s_world_components,
+                    s_mission_objects[index].model_index);
+            }
+        }
+        if (valid) {
             size_t world_collision_count = 0;
             size_t spawn_collision_count = 0;
             size_t world_model_collision_count = 0;
@@ -936,6 +958,7 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
     uint32_t enemy_index;
     uint32_t projectile_index;
     uint32_t pickup_index;
+    uint32_t object_index;
     uint32_t triangle_index;
     if (!btga_projector_init(&runtime->camera, 960.0f / 544.0f, 37.0f, 16.0f,
                              &draw.projector)) return 0;
@@ -1008,6 +1031,25 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
                               s_geometry_pool.data, s_geometry_pool.size,
                               1000, draw_world_triangle, &draw,
                               &tank_triangles)) return 0;
+    }
+    for (object_index = 0;
+         object_index < runtime->mission_object_count &&
+         object_index < s_mission_object_count; object_index++) {
+        const BtgaMissionObject *object = &runtime->mission_objects[object_index];
+        const BtgaWorldComponents *components = s_mission_object_actor[object_index]
+            ? &s_spawn_components : &s_world_components;
+        uint8_t part;
+        if (!object->active) continue;
+        for (part = 0;
+             part < components->models[(size_t)object->world.model_index * 16];
+             part++) {
+            if (!btga_model_visit(components, object->world.model_index, part,
+                                  object->world.x, object->world.y,
+                                  object->world.z, object->world.yaw,
+                                  s_geometry_pool.data, s_geometry_pool.size,
+                                  2000, draw_world_triangle, &draw,
+                                  &tank_triangles)) return 0;
+        }
     }
     draw.actor = false;
     if (draw.count >= kMaximumProjectedTriangles) return draw.count;
@@ -1184,6 +1226,13 @@ bool vita_platform_mission_config(BtgaMissionConfig *config) {
 bool vita_platform_pickup(size_t index, BtgaWorldPickup *pickup) {
     if (!s_world_ready || pickup == NULL || index >= s_pickup_count) return false;
     *pickup = s_pickups[index];
+    return true;
+}
+
+bool vita_platform_mission_object(size_t index, BtgaWorldObject *object) {
+    if (!s_world_ready || object == NULL || index >= s_mission_object_count)
+        return false;
+    *object = s_mission_objects[index];
     return true;
 }
 

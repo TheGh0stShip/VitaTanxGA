@@ -103,10 +103,19 @@ typedef struct BtgaPickup {
     bool active;
 } BtgaPickup;
 
+typedef struct BtgaMissionObject {
+    BtgaWorldObject world;
+    uint16_t health;
+    uint16_t max_health;
+    bool objective;
+    bool active;
+} BtgaMissionObject;
+
 enum {
     BTGA_MAX_PROJECTILES = 32,
     BTGA_MAX_ENEMIES = 20,
     BTGA_MAX_PICKUPS = 160,
+    BTGA_MAX_MISSION_OBJECTS = 512,
     BTGA_PICKUP_KIND_COUNT = 20,
     BTGA_WEAPON_COUNT = 18,
 };
@@ -121,8 +130,12 @@ typedef struct BtgaRuntime {
     BtgaProjectile projectiles[BTGA_MAX_PROJECTILES];
     BtgaEnemy enemies[BTGA_MAX_ENEMIES];
     BtgaPickup pickups[BTGA_MAX_PICKUPS];
+    BtgaMissionObject mission_objects[BTGA_MAX_MISSION_OBJECTS];
     uint16_t weapon_ammo[BTGA_WEAPON_COUNT];
     uint8_t pickup_count;
+    uint16_t mission_object_count;
+    uint16_t objective_object_count;
+    uint16_t objective_objects_remaining;
     uint8_t last_pickup_kind;
     uint16_t pickup_message_ticks;
     uint8_t sound_effect;
@@ -169,6 +182,8 @@ bool btga_runtime_add_ally(BtgaRuntime *runtime, float x, float y, float z,
                            uint16_t yaw);
 bool btga_runtime_add_pickup(BtgaRuntime *runtime, float x, float y, float z,
                              uint8_t kind);
+bool btga_runtime_add_mission_object(BtgaRuntime *runtime,
+                                     const BtgaWorldObject *object);
 bool btga_runtime_set_intro_script(BtgaRuntime *runtime, const uint8_t *data,
                                    size_t size);
 void btga_runtime_update(BtgaRuntime *runtime, const BtgaInput *input,
@@ -176,6 +191,7 @@ void btga_runtime_update(BtgaRuntime *runtime, const BtgaInput *input,
 uint32_t btga_runtime_active_enemies(const BtgaRuntime *runtime);
 uint32_t btga_runtime_active_allies(const BtgaRuntime *runtime);
 uint32_t btga_runtime_active_pickups(const BtgaRuntime *runtime);
+uint32_t btga_runtime_active_objectives(const BtgaRuntime *runtime);
 const char *btga_runtime_pickup_name(uint8_t kind);
 const char *btga_runtime_weapon_name(uint8_t weapon);
 uint8_t btga_runtime_pickup_weapon(uint8_t pickup_kind);

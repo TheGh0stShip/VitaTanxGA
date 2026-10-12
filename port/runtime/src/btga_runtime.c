@@ -35,6 +35,44 @@ static void damage_enemies_in_radius(BtgaRuntime *runtime, float x, float z,
     }
 }
 
+static bool point_in_object(const BtgaMissionObject *object, float x, float y,
+                            float z, float padding) {
+    float angle = (float)object->world.yaw * (6.28318530718f / 65536.0f);
+    float sine = sinf(angle), cosine = cosf(angle);
+    float dx = x - object->world.x, dz = z - object->world.z;
+    float local_x = cosine * dx - sine * dz;
+    float local_z = sine * dx + cosine * dz;
+    float local_y = y - object->world.y;
+    return local_x >= object->world.min_x - padding &&
+           local_x <= object->world.max_x + padding &&
+           local_y >= object->world.min_y - padding &&
+           local_y <= object->world.max_y + padding &&
+           local_z >= object->world.min_z - padding &&
+           local_z <= object->world.max_z + padding;
+}
+
+static void damage_object(BtgaRuntime *runtime, BtgaMissionObject *object,
+                          uint16_t damage) {
+    if (!object->active) return;
+    object->health = object->health > damage ?
+        (uint16_t)(object->health - damage) : 0;
+    if (object->health != 0) return;
+    object->active = false;
+    if (object->objective && runtime->objective_objects_remaining != 0)
+        runtime->objective_objects_remaining--;
+}
+
+static void damage_objects_in_radius(BtgaRuntime *runtime, float x, float y,
+                                     float z, uint16_t radius,
+                                     uint16_t damage) {
+    uint16_t index;
+    for (index = 0; index < runtime->mission_object_count; index++) {
+        BtgaMissionObject *object = &runtime->mission_objects[index];
+        if (object->active && point_in_object(object, x, y, z, radius))
+            damage_object(runtime, object, damage);
+    }
+}
+
 static uint16_t radians_to_yaw(float angle) {
     float turns = fmodf(angle, 6.28318530718f);
     if (turns < 0.0f) turns += 6.28318530718f;
@@ -504,6 +542,25 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
                     break;
                 }
             }
+            if (projectile->active) {
+                uint16_t object_index;
+                for (object_index = 0;
+                     object_index < runtime->mission_object_count;
+                     object_index++) {
+                    BtgaMissionObject *object =
+                        &runtime->mission_objects[object_index];
+                    if (!object->active || !point_in_object(
+                            object, projectile->x, projectile->y,
+                            projectile->z, 8.0f)) continue;
+                    if (projectile->blast_radius != 0)
+                        damage_objects_in_radius(runtime, projectile->x,
+                            projectile->y, projectile->z,
+                            projectile->blast_radius, projectile->damage);
+                    else damage_object(runtime, object, projectile->damage);
+                    projectile->active = false;
+                    break;
+                }
+            }
         } else {
             float dx = projectile->x - runtime->player.x;
             float dz = projectile->z - runtime->player.z;
@@ -546,6 +603,10 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
                     damage_enemies_in_radius(runtime, projectile->x,
                         projectile->z, projectile->blast_radius,
                         projectile->damage);
+                if (projectile->team == 0 && projectile->blast_radius != 0)
+                    damage_objects_in_radius(runtime, projectile->x,
+                        projectile->y, projectile->z,
+                        projectile->blast_radius, projectile->damage);
                 projectile->active = false;
                 continue;
             }
@@ -555,6 +616,10 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
             projectile->z > runtime->world_max_z) {
             if (projectile->team == 0 && projectile->blast_radius != 0)
                 damage_enemies_in_radius(runtime, projectile->x, projectile->z,
+                    projectile->blast_radius, projectile->damage);
+            if (projectile->team == 0 && projectile->blast_radius != 0)
+                damage_objects_in_radius(runtime, projectile->x,
+                    projectile->y, projectile->z,
                     projectile->blast_radius, projectile->damage);
             projectile->active = false;
         }
@@ -568,7 +633,8 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
     runtime->camera.yaw = runtime->player.yaw;
     runtime->camera.pitch = -0.42f;
     if (runtime->player.health == 0) runtime->screen = BTGA_SCREEN_DEFEAT;
-    else if (btga_runtime_active_enemies(runtime) == 0)
+    else if (btga_runtime_active_enemies(runtime) == 0 &&
+             runtime->objective_objects_remaining == 0)
         runtime->screen = BTGA_SCREEN_VICTORY;
 }
 
@@ -599,6 +665,10 @@ uint32_t btga_runtime_active_pickups(const BtgaRuntime *runtime) {
     return count;
 }
 
+uint32_t btga_runtime_active_objectives(const BtgaRuntime *runtime) {
+    return runtime == NULL ? 0 : runtime->objective_objects_remaining;
+}
+
 const char *btga_runtime_pickup_name(uint8_t kind) {
     static const char *const names[BTGA_PICKUP_KIND_COUNT] = {
         "POWERUP", "SWARMERS", "LASERS", "GUIDED MISSILES", "GUN BUDDIES",
@@ -626,6 +696,29 @@ bool btga_runtime_add_pickup(BtgaRuntime *runtime, float x, float y, float z,
         runtime->pickup_count >= BTGA_MAX_PICKUPS) return false;
     pickup = &runtime->pickups[runtime->pickup_count++];
     *pickup = (BtgaPickup){x, y, z, kind, true};
+    return true;
+}
+
+bool btga_runtime_add_mission_object(BtgaRuntime *runtime,
+                                     const BtgaWorldObject *object) {
+    BtgaMissionObject *destination;
+    bool objective;
+    uint16_t health;
+    if (runtime == NULL || object == NULL ||
+        runtime->mission_object_count >= BTGA_MAX_MISSION_OBJECTS) return false;
+    /* The recovered kind-21 handler explicitly supplies mission_type. Keep
+       ordinary combat structures destructible without inventing objectives. */
+    objective = object->kind == 21 && object->mission_type != 0;
+    health = object->kind == 3 ? 300 : object->kind == 4 ? 180 : 100;
+    destination = &runtime->mission_objects[runtime->mission_object_count++];
+    *destination = (BtgaMissionObject){
+        .world = *object, .health = health, .max_health = health,
+        .objective = objective, .active = true,
+    };
+    if (objective) {
+        runtime->objective_object_count++;
+        runtime->objective_objects_remaining++;
+    }
     return true;
 }
 
@@ -699,6 +792,12 @@ void btga_runtime_restart_mission(BtgaRuntime *runtime) {
         runtime->projectiles[index].active = false;
     for (index = 0; index < runtime->pickup_count; index++)
         runtime->pickups[index].active = true;
+    runtime->objective_objects_remaining = runtime->objective_object_count;
+    for (index = 0; index < runtime->mission_object_count; index++) {
+        runtime->mission_objects[index].health =
+            runtime->mission_objects[index].max_health;
+        runtime->mission_objects[index].active = true;
+    }
     for (index = 0; index < BTGA_WEAPON_COUNT; index++)
         runtime->weapon_ammo[index] = 0;
     runtime->pickup_message_ticks = 0;

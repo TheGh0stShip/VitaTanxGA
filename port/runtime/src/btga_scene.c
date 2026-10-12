@@ -15,9 +15,9 @@ static uint16_t read_be_u16(const uint8_t *bytes) {
 
 static bool renderable_kind(uint8_t kind) {
     switch (kind) {
-        case 0: case 1: case 2: case 3: case 4: case 5: case 10:
-        case 11: case 14: case 20: case 21: case 22: case 24: case 29:
-        case 31: case 34: case 35: case 40: case 42: case 43: case 44:
+        case 0: case 1: case 2: case 10: case 11: case 14: case 20:
+        case 22: case 29: case 34: case 35: case 40: case 42: case 43:
+        case 44:
             return true;
         default:
             return false;

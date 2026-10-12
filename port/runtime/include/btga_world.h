@@ -50,6 +50,16 @@ typedef struct BtgaWorldCollision {
     int16_t max_x, max_y, max_z;
 } BtgaWorldCollision;
 
+typedef struct BtgaWorldObject {
+    int16_t x, y, z;
+    uint16_t yaw;
+    int16_t min_x, min_y, min_z;
+    int16_t max_x, max_y, max_z;
+    uint16_t model_index;
+    uint8_t kind;
+    uint8_t mission_type;
+} BtgaWorldObject;
+
 bool btga_world_validate(const BtgaWorldComponents *components,
                          BtgaWorldSummary *summary);
 uint32_t btga_read_be_u32(const uint8_t bytes[4]);
@@ -65,5 +75,8 @@ bool btga_world_pickups(const BtgaWorldComponents *components,
 bool btga_world_collisions(const BtgaWorldComponents *components,
                            BtgaWorldCollision *collisions, size_t capacity,
                            size_t *collision_count);
+bool btga_world_objects(const BtgaWorldComponents *components,
+                        BtgaWorldObject *objects, size_t capacity,
+                        size_t *object_count);
 
 #endif

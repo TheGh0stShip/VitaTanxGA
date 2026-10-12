@@ -350,10 +350,10 @@ int main(int argc, char **argv) {
     printf("scene traversed: %u placements, %u triangles\n",
            scene_summary.renderable_placement_count,
            scene_summary.visited_triangle_count);
-    if (scene_summary.renderable_placement_count != 726 ||
-        scene_summary.visited_triangle_count != 7030 ||
-        actor_scene_summary.renderable_placement_count != 45 ||
-        actor_scene_summary.visited_triangle_count != 506 ||
+    if (scene_summary.renderable_placement_count != 710 ||
+        scene_summary.visited_triangle_count != 6303 ||
+        actor_scene_summary.renderable_placement_count != 33 ||
+        actor_scene_summary.visited_triangle_count != 386 ||
         collision_count != 0 || world_model_collision_count != 556 ||
         actor_model_collision_count != 24) {
         fprintf(stderr, "placed scene totals disagree with the verified corpus\n");

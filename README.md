@@ -37,15 +37,17 @@ The repository currently produces an installable PS Vita VPK that:
 - renders those enemies with their recovered per-kind vehicle definitions,
   retail campaign team colors, independently tracking turret parts, steering,
   pursuit, firing along the turret heading, projectile ownership, hit detection,
-  damage, and enemy-only mission completion;
+  damage, and enemy plus recovered mission-object completion;
 - resolves and renders all 41 first-mission pickup placements through the
   recovered pickup-kind/model table and original textured common-world models,
   with retail health, ammunition, weapon inventory, tank-buck, and radar effects;
 - derives navigation heights from the placed retail level geometry;
 - loads and validates extracted big-endian world component tables;
-- renders nearby recovered actor-world props, structures, and initial dynamic
-  object models in addition to the base terrain world, with placement culling
-  sized for Vita memory;
+- instantiates recovered structures, turrets, foliage, mission props, selection
+  actors, and actor structures as live objects with retail model bounds,
+  projectile/blast damage, destruction, and restart state; nonzero recovered
+  mission-type markers participate in completion without treating scenery as
+  an objective;
 - packages the campaign worlds, shared world pools, projectile
   sprites, the decoded SFX bank, mission scripts, and original campaign
   text/configuration tables;

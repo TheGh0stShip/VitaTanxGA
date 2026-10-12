@@ -213,3 +213,71 @@ bool btga_world_collisions(const BtgaWorldComponents *c,
     *collision_count = count;
     return true;
 }
+
+static uint8_t object_model_count(uint8_t kind) {
+    switch (kind) {
+        case 3: return 8;
+        case 4: return 5;
+        case 5: return 3;
+        case 21: return 5;
+        case 24: return 3;
+        case 31: return 1;
+        default: return 0;
+    }
+}
+
+bool btga_world_objects(const BtgaWorldComponents *c,
+                        BtgaWorldObject *objects, size_t capacity,
+                        size_t *object_count) {
+    BtgaWorldSummary summary;
+    uint32_t placement_index;
+    size_t count = 0;
+    if (object_count == NULL || (capacity != 0 && objects == NULL) ||
+        !btga_world_validate(c, &summary)) return false;
+    for (placement_index = 0; placement_index < summary.placement_count;
+         placement_index++) {
+        const uint8_t *placement = c->placements + placement_index * BTGA_PLACEMENT_SIZE;
+        uint32_t offset = btga_read_be_u32(placement + 8);
+        const uint8_t *definition;
+        uint8_t candidates, candidate;
+        uint16_t model_index = UINT16_MAX;
+        const uint8_t *model;
+        if (offset > c->definitions_size || c->definitions_size - offset < 4)
+            continue;
+        definition = c->definitions + offset;
+        candidates = object_model_count(definition[0]);
+        if (candidates == 0) continue;
+        if (definition[0] == 31) {
+            model_index = read_be_u16(definition + 2);
+        } else {
+            for (candidate = 0; candidate < candidates; candidate++) {
+                size_t field = 2u + (size_t)candidate * 2u;
+                if (field + 2u > c->definitions_size - offset) break;
+                model_index = read_be_u16(definition + field);
+                if (model_index != UINT16_MAX && model_index < summary.model_count)
+                    break;
+            }
+        }
+        if (model_index == UINT16_MAX || model_index >= summary.model_count)
+            continue;
+        if (count >= capacity) return false;
+        model = c->models + (size_t)model_index * BTGA_MODEL_SIZE;
+        objects[count++] = (BtgaWorldObject){
+            (int16_t)read_be_u16(placement),
+            (int16_t)read_be_u16(placement + 2),
+            (int16_t)read_be_u16(placement + 4),
+            read_be_u16(placement + 6),
+            (int16_t)read_be_u16(model + 4),
+            (int16_t)read_be_u16(model + 6),
+            (int16_t)read_be_u16(model + 8),
+            (int16_t)read_be_u16(model + 10),
+            (int16_t)read_be_u16(model + 12),
+            (int16_t)read_be_u16(model + 14),
+            model_index, definition[0],
+            definition[0] == 21 && c->definitions_size - offset > 20
+                ? definition[20] : 0,
+        };
+    }
+    *object_count = count;
+    return true;
+}

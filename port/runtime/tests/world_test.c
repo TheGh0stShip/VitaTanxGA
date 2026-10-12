@@ -5,7 +5,7 @@
 int btga_world_tests(void) {
     uint8_t groups[16] = {0, 1, 0, 0};
     uint8_t placements[12] = {0};
-    uint8_t definitions[16] = {0};
+    uint8_t definitions[24] = {0};
     uint8_t models[16] = {1, 0, 0, 0};
     uint8_t parts[4] = {1, 0, 0, 0};
     uint8_t references[24] = {0};
@@ -14,6 +14,7 @@ int btga_world_tests(void) {
     BtgaWorldSpawn spawn;
     BtgaWorldPickup pickup;
     BtgaWorldCollision collision;
+    BtgaWorldObject object;
     size_t pickup_count;
     uint16_t model_index;
     BtgaWorldComponents c = {
@@ -52,6 +53,17 @@ int btga_world_tests(void) {
     definitions[1] = 0;
     assert(btga_world_collisions(&c, &collision, 1, &pickup_count));
     assert(pickup_count == 0);
+    definitions[0] = 21;
+    definitions[2] = 0; definitions[3] = 0;
+    definitions[20] = 7;
+    c.definitions_size = 21;
+    models[4] = 0xFF; models[5] = 0xEC;
+    models[10] = 0; models[11] = 20;
+    assert(btga_world_objects(&c, &object, 1, &pickup_count));
+    assert(pickup_count == 1 && object.kind == 21 &&
+           object.mission_type == 7 && object.model_index == 0 &&
+           object.min_x == -20 && object.max_x == 20);
+    definitions[0] = 30;
     c.definitions_size = 1;
     models[1] = 1;
     assert(!btga_world_validate(&c, &summary));
