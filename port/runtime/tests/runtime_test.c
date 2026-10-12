@@ -18,6 +18,9 @@ int main(void) {
     assert(runtime.running);
     assert(runtime.screen == BTGA_SCREEN_TITLE);
     assert(btga_runtime_add_enemy(&runtime, 100.0f, 0.0f, 200.0f, 0));
+    assert(btga_runtime_add_ally(&runtime, -100.0f, 0.0f, 200.0f, 0));
+    assert(btga_runtime_active_enemies(&runtime) == 1);
+    assert(btga_runtime_active_allies(&runtime) == 1);
     assert(runtime.enemies[0].active && runtime.enemies[0].health == 100);
     assert(btga_runtime_add_pickup(&runtime, 0.0f, 0.0f, 576.0f, 7));
     assert(btga_runtime_add_pickup(&runtime, 0.0f, 0.0f, 576.0f, 1));

@@ -27,6 +27,11 @@ int main(void) {
     }
     {
         uint8_t column;
+        for (column = 1; column < 4; column++) {
+            if (vita_platform_spawn(0, column, &spawn))
+                btga_runtime_add_ally(&runtime, spawn.x, spawn.y, spawn.z,
+                                      spawn.yaw);
+        }
         for (column = 0; column < 5; column++) {
             if (vita_platform_spawn(1, column, &spawn))
                 btga_runtime_add_enemy(&runtime, spawn.x, spawn.y, spawn.z,

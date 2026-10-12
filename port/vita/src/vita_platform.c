@@ -805,12 +805,15 @@ void vita_platform_draw(const BtgaRuntime *runtime) {
     } else if (runtime->screen == BTGA_SCREEN_GAMEPLAY ||
                runtime->screen == BTGA_SCREEN_PAUSED) {
         vita2d_pgf_draw_textf(s_font, 18, 30, kColorWhite, 0.64f,
-                              "ARMOR %u   AMMO %u   ENEMY %lu   PICKUP %lu",
+                              "ARMOR %u  AMMO %u  ALLY %lu  ENEMY %lu  PICKUP %lu",
                               runtime->player.health, runtime->player.ammo,
+                              (unsigned long)btga_runtime_active_allies(runtime),
                               (unsigned long)btga_runtime_active_enemies(runtime),
                               (unsigned long)btga_runtime_active_pickups(runtime));
         vita2d_pgf_draw_text(s_font, 18, 52, kColorGray, 0.55f,
                              "LEFT: drive  RIGHT: turret  R: fire  START: pause");
+        vita2d_pgf_draw_text(s_font, 18, 78, kColorOrange, 0.55f,
+                             "OBJECTIVE: DESTROY ALL INVADING TANKS");
         if (runtime->pickup_message_ticks != 0)
             vita2d_pgf_draw_textf(s_font, 330, 500, kColorOrange, 0.72f,
                                   "PICKED UP %s",

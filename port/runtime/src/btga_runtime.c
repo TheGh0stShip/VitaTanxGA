@@ -15,7 +15,7 @@ static float clampf(float value, float minimum, float maximum) {
 }
 
 static void spawn_projectile(BtgaRuntime *runtime, float x, float y, float z,
-                             float heading, uint8_t owner) {
+                             float heading, uint8_t owner, uint8_t team) {
     unsigned int index;
     if (owner == 0 &&
         (runtime->player.ammo == 0 || runtime->player.fire_cooldown != 0)) return;
@@ -29,6 +29,7 @@ static void spawn_projectile(BtgaRuntime *runtime, float x, float y, float z,
         projectile->velocity_z = cosf(heading) * 95.0f;
         projectile->lifetime = 75;
         projectile->owner = owner;
+        projectile->team = team;
         projectile->active = true;
         if (owner == 0) {
             runtime->player.ammo--;
@@ -50,9 +51,49 @@ static void update_enemies(BtgaRuntime *runtime) {
     for (index = 0; index < BTGA_MAX_ENEMIES; index++) {
         BtgaEnemy *enemy = &runtime->enemies[index];
         float dx, dz, distance, target_yaw, turn;
+        float target_x = runtime->player.x;
+        float target_z = runtime->player.z;
+        unsigned int target_index;
         if (!enemy->active) continue;
-        dx = runtime->player.x - enemy->x;
-        dz = runtime->player.z - enemy->z;
+        if (enemy->allied) {
+            float best = 1.0e30f;
+            bool found = false;
+            for (target_index = 0; target_index < BTGA_MAX_ENEMIES; target_index++) {
+                const BtgaEnemy *candidate = &runtime->enemies[target_index];
+                float tx, tz, squared;
+                if (!candidate->active || candidate->allied) continue;
+                tx = candidate->x - enemy->x;
+                tz = candidate->z - enemy->z;
+                squared = tx * tx + tz * tz;
+                if (squared < best) {
+                    best = squared;
+                    target_x = candidate->x;
+                    target_z = candidate->z;
+                    found = true;
+                }
+            }
+            if (!found) continue;
+        } else {
+            float best = (runtime->player.x - enemy->x) *
+                         (runtime->player.x - enemy->x) +
+                         (runtime->player.z - enemy->z) *
+                         (runtime->player.z - enemy->z);
+            for (target_index = 0; target_index < BTGA_MAX_ENEMIES; target_index++) {
+                const BtgaEnemy *candidate = &runtime->enemies[target_index];
+                float tx, tz, squared;
+                if (!candidate->active || !candidate->allied) continue;
+                tx = candidate->x - enemy->x;
+                tz = candidate->z - enemy->z;
+                squared = tx * tx + tz * tz;
+                if (squared < best) {
+                    best = squared;
+                    target_x = candidate->x;
+                    target_z = candidate->z;
+                }
+            }
+        }
+        dx = target_x - enemy->x;
+        dz = target_z - enemy->z;
         distance = sqrtf(dx * dx + dz * dz);
         target_yaw = atan2f(dx, dz);
         turn = clampf(angle_delta(target_yaw, enemy->yaw), -0.035f, 0.035f);
@@ -71,7 +112,8 @@ static void update_enemies(BtgaRuntime *runtime) {
         if (distance < 1400.0f && fabsf(angle_delta(target_yaw, enemy->yaw)) < 0.12f &&
             enemy->fire_cooldown == 0) {
             spawn_projectile(runtime, enemy->x, enemy->y, enemy->z,
-                             enemy->yaw, (uint8_t)(index + 1));
+                             enemy->yaw, (uint8_t)(index + 1),
+                             enemy->allied ? 0 : 1);
             enemy->fire_cooldown = 45;
         }
     }
@@ -105,7 +147,7 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
     if ((pressed & BTGA_BUTTON_FIRE) != 0)
         spawn_projectile(runtime, runtime->player.x, runtime->player.y,
                          runtime->player.z,
-                         runtime->player.yaw + runtime->player.turret_yaw, 0);
+                         runtime->player.yaw + runtime->player.turret_yaw, 0, 0);
     update_enemies(runtime);
     for (index = 0; index < runtime->pickup_count; index++) {
         BtgaPickup *pickup = &runtime->pickups[index];
@@ -155,13 +197,14 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
         if (!projectile->active) continue;
         projectile->x += projectile->velocity_x;
         projectile->z += projectile->velocity_z;
-        if (projectile->owner == 0) {
+        if (projectile->team == 0) {
             unsigned int enemy_index;
             for (enemy_index = 0; enemy_index < BTGA_MAX_ENEMIES; enemy_index++) {
                 BtgaEnemy *enemy = &runtime->enemies[enemy_index];
                 float dx = projectile->x - enemy->x;
                 float dz = projectile->z - enemy->z;
-                if (enemy->active && dx * dx + dz * dz < 2500.0f) {
+                if (enemy->active && !enemy->allied &&
+                    dx * dx + dz * dz < 2500.0f) {
                     enemy->health = enemy->health > 25 ? enemy->health - 25 : 0;
                     if (enemy->health == 0) enemy->active = false;
                     projectile->active = false;
@@ -175,6 +218,21 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
                 runtime->player.health = runtime->player.health > 10
                     ? runtime->player.health - 10 : 0;
                 projectile->active = false;
+            }
+            if (projectile->active) {
+                unsigned int ally_index;
+                for (ally_index = 0; ally_index < BTGA_MAX_ENEMIES; ally_index++) {
+                    BtgaEnemy *ally = &runtime->enemies[ally_index];
+                    dx = projectile->x - ally->x;
+                    dz = projectile->z - ally->z;
+                    if (ally->active && ally->allied &&
+                        dx * dx + dz * dz < 2500.0f) {
+                        ally->health = ally->health > 10 ? ally->health - 10 : 0;
+                        if (ally->health == 0) ally->active = false;
+                        projectile->active = false;
+                        break;
+                    }
+                }
             }
         }
         if (!projectile->active) continue;
@@ -200,7 +258,16 @@ uint32_t btga_runtime_active_enemies(const BtgaRuntime *runtime) {
     unsigned int index;
     if (runtime == NULL) return 0;
     for (index = 0; index < BTGA_MAX_ENEMIES; index++)
-        if (runtime->enemies[index].active) count++;
+        if (runtime->enemies[index].active && !runtime->enemies[index].allied) count++;
+    return count;
+}
+
+uint32_t btga_runtime_active_allies(const BtgaRuntime *runtime) {
+    uint32_t count = 0;
+    unsigned int index;
+    if (runtime == NULL) return 0;
+    for (index = 0; index < BTGA_MAX_ENEMIES; index++)
+        if (runtime->enemies[index].active && runtime->enemies[index].allied) count++;
     return count;
 }
 
@@ -248,6 +315,21 @@ bool btga_runtime_add_enemy(BtgaRuntime *runtime, float x, float y, float z,
             .configured = true, .active = true,
         };
         return true;
+    }
+    return false;
+}
+
+bool btga_runtime_add_ally(BtgaRuntime *runtime, float x, float y, float z,
+                           uint16_t yaw) {
+    unsigned int index;
+    if (!btga_runtime_add_enemy(runtime, x, y, z, yaw)) return false;
+    for (index = 0; index < BTGA_MAX_ENEMIES; index++) {
+        BtgaEnemy *actor = &runtime->enemies[index];
+        if (actor->configured && actor->spawn_x == x && actor->spawn_y == y &&
+            actor->spawn_z == z && !actor->allied) {
+            actor->allied = true;
+            return true;
+        }
     }
     return false;
 }

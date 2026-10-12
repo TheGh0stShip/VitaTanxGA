@@ -62,6 +62,7 @@ typedef struct BtgaProjectile {
     float velocity_z;
     uint16_t lifetime;
     uint8_t owner;
+    uint8_t team;
     bool active;
 } BtgaProjectile;
 
@@ -74,6 +75,7 @@ typedef struct BtgaEnemy {
     uint16_t health;
     uint16_t fire_cooldown;
     bool configured;
+    bool allied;
     bool active;
 } BtgaEnemy;
 
@@ -132,6 +134,8 @@ void btga_runtime_set_player_spawn(BtgaRuntime *runtime, float x, float y,
                                    float z, uint16_t yaw);
 bool btga_runtime_add_enemy(BtgaRuntime *runtime, float x, float y, float z,
                             uint16_t yaw);
+bool btga_runtime_add_ally(BtgaRuntime *runtime, float x, float y, float z,
+                           uint16_t yaw);
 bool btga_runtime_add_pickup(BtgaRuntime *runtime, float x, float y, float z,
                              uint8_t kind);
 bool btga_runtime_set_intro_script(BtgaRuntime *runtime, const uint8_t *data,
@@ -139,6 +143,7 @@ bool btga_runtime_set_intro_script(BtgaRuntime *runtime, const uint8_t *data,
 void btga_runtime_update(BtgaRuntime *runtime, const BtgaInput *input,
                          uint32_t elapsed_us);
 uint32_t btga_runtime_active_enemies(const BtgaRuntime *runtime);
+uint32_t btga_runtime_active_allies(const BtgaRuntime *runtime);
 uint32_t btga_runtime_active_pickups(const BtgaRuntime *runtime);
 const char *btga_runtime_pickup_name(uint8_t kind);
 void btga_runtime_restart_mission(BtgaRuntime *runtime);
