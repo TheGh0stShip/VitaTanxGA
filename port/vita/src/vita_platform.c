@@ -83,6 +83,7 @@ typedef struct ProjectedTriangle {
     vita2d_color_vertex vertices[3];
     vita2d_texture_vertex texture_vertices[3];
     const CachedTexture *texture;
+    uint32_t color;
     float depth;
     bool actor;
 } ProjectedTriangle;
@@ -500,6 +501,7 @@ static bool draw_world_triangle(const BtgaPlacedTriangle *triangle, void *contex
                                             triangle->state_size);
     }
     output->texture = draw->texture;
+    output->color = RGBA8(red, green, blue, draw->material.alpha);
     for (index = 0; index < 3; index++) {
         float normalized_depth = projected[index].depth / 20000.0f;
         if (normalized_depth < 0.0f) normalized_depth = 0.0f;
@@ -513,12 +515,12 @@ static bool draw_world_triangle(const BtgaPlacedTriangle *triangle, void *contex
         output->texture_vertices[index] = (vita2d_texture_vertex){
             output->vertices[index].x, output->vertices[index].y, normalized_depth,
             output->texture != NULL
-                ? (float)triangle->vertices[index].s /
-                      (32.0f * output->texture->info.width)
+                ? btga_texture_u(&output->texture->info,
+                                 triangle->vertices[index].s)
                 : 0.0f,
             output->texture != NULL
-                ? (float)triangle->vertices[index].t /
-                      (32.0f * output->texture->info.height)
+                ? btga_texture_v(&output->texture->info,
+                                 triangle->vertices[index].t)
                 : 0.0f,
         };
     }
@@ -608,11 +610,13 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
     triangle_index = 0;
     while (triangle_index < draw.count) {
         const CachedTexture *texture = s_projected_triangles[triangle_index].texture;
+        uint32_t color = s_projected_triangles[triangle_index].color;
         uint32_t group_start = triangle_index;
         uint32_t group_count;
         uint32_t output_index = 0;
         while (triangle_index < draw.count &&
-               s_projected_triangles[triangle_index].texture == texture) {
+               s_projected_triangles[triangle_index].texture == texture &&
+               s_projected_triangles[triangle_index].color == color) {
             unsigned int vertex_index;
             for (vertex_index = 0; vertex_index < 3; vertex_index++) {
                 s_draw_vertices[output_index] =
@@ -626,7 +630,7 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
         group_count = triangle_index - group_start;
         if (texture != NULL)
             vita2d_draw_array_textured(texture->texture, SCE_GXM_PRIMITIVE_TRIANGLES,
-                                       s_texture_vertices, group_count * 3, 0xFFFFFFFFu);
+                                       s_texture_vertices, group_count * 3, color);
         else
             vita2d_draw_array(SCE_GXM_PRIMITIVE_TRIANGLES, s_draw_vertices,
                               group_count * 3);

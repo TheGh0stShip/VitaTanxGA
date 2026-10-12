@@ -72,8 +72,13 @@ bool btga_texture_describe(const uint8_t *texture_chunk, size_t texture_size,
     size_t index;
     uint32_t tile_w0 = 0;
     uint32_t tile_w1 = 0;
+    uint32_t size_w0 = 0;
     uint32_t size_w1 = 0;
     uint32_t images[16];
+    uint16_t u_low;
+    uint16_t v_low;
+    uint16_t u_high;
+    uint16_t v_high;
     unsigned int image_count = 0;
     bool have_tile = false;
     bool have_size = false;
@@ -92,23 +97,51 @@ bool btga_texture_describe(const uint8_t *texture_chunk, size_t texture_size,
             tile_w1 = read_be_u32(command + 4);
             have_tile = true;
         } else if (command[0] == 0xF2) {
+            size_w0 = read_be_u32(command);
             size_w1 = read_be_u32(command + 4);
             have_size = true;
         }
     }
     if (image_count == 0 || !have_tile || !have_size) return false;
+    u_low = (uint16_t)((size_w0 >> 12) & 0xFFF);
+    v_low = (uint16_t)(size_w0 & 0xFFF);
+    u_high = (uint16_t)((size_w1 >> 12) & 0xFFF);
+    v_high = (uint16_t)(size_w1 & 0xFFF);
+    if (u_high < u_low || v_high < v_low) return false;
     *info = (BtgaTextureInfo){
         .image_offset = images[image_count - 1],
         .palette_offset = image_count > 1 ? images[0] : 0,
-        .width = (uint16_t)(((size_w1 >> 12) & 0xFFF) / 4 + 1),
-        .height = (uint16_t)((size_w1 & 0xFFF) / 4 + 1),
+        .width = (uint16_t)((u_high - u_low) / 4 + 1),
+        .height = (uint16_t)((v_high - v_low) / 4 + 1),
+        .u_low = u_low,
+        .v_low = v_low,
         .format_id = (uint8_t)((tile_w0 >> 21) & 7),
         .size_id = (uint8_t)((tile_w0 >> 19) & 3),
+        .u_shift = (uint8_t)(tile_w1 & 15),
+        .v_shift = (uint8_t)((tile_w1 >> 10) & 15),
         .u_address_mode = (uint8_t)((tile_w1 >> 8) & 3),
         .v_address_mode = (uint8_t)((tile_w1 >> 18) & 3),
         .has_palette = image_count > 1,
     };
     return info->width != 0 && info->height != 0 && info->image_offset < texture_size;
+}
+
+static float shifted_coordinate(int16_t coordinate, uint8_t shift) {
+    float texels = (float)coordinate / 32.0f;
+    if (shift <= 10) return texels / (float)(1u << shift);
+    return texels * (float)(1u << (16u - shift));
+}
+
+float btga_texture_u(const BtgaTextureInfo *info, int16_t s) {
+    if (info == NULL || info->width == 0) return 0.0f;
+    return (shifted_coordinate(s, info->u_shift) -
+            (float)info->u_low / 4.0f) / info->width;
+}
+
+float btga_texture_v(const BtgaTextureInfo *info, int16_t t) {
+    if (info == NULL || info->height == 0) return 0.0f;
+    return (shifted_coordinate(t, info->v_shift) -
+            (float)info->v_low / 4.0f) / info->height;
 }
 
 bool btga_texture_decode_rgba(const uint8_t *chunk, size_t size,

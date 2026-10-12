@@ -61,6 +61,8 @@ int main(int argc, char **argv) {
     uint64_t vertex_loads = 0;
     uint32_t decoded_textures = 0;
     uint32_t unsupported_textures = 0;
+    uint32_t shifted_textures = 0;
+    uint32_t offset_textures = 0;
     BtgaSceneSummary scene_summary;
     BtgaWorldBounds world_bounds;
     BtgaTerrain terrain;
@@ -257,6 +259,10 @@ int main(int argc, char **argv) {
                 continue;
             }
             pixel_count = (size_t)texture_info.width * texture_info.height;
+            if (texture_info.u_shift != 0 || texture_info.v_shift != 0)
+                shifted_textures++;
+            if (texture_info.u_low != 0 || texture_info.v_low != 0)
+                offset_textures++;
             if (pixel_count > texture_capacity) {
                 uint32_t *replacement = realloc(texture_pixels,
                                                 pixel_count * sizeof(*texture_pixels));
@@ -274,6 +280,8 @@ int main(int argc, char **argv) {
            (unsigned long long)triangles, (unsigned long long)vertex_loads);
     printf("textures decoded: %u references, %u unsupported\n", decoded_textures,
            unsupported_textures);
+    printf("texture coordinates: %u shifted, %u offset tiles\n",
+           shifted_textures, offset_textures);
     if (decoded_textures != 275 || unsupported_textures != 0) {
         fprintf(stderr, "texture totals disagree with the verified corpus\n");
         goto cleanup;
