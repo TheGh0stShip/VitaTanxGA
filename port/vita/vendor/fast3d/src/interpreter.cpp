@@ -2288,14 +2288,9 @@ void Interpreter::GfxSpTri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t vtx3_idx
     }
 	
 	mBufVboLen = buf_vbo_ptr - mBufVbo;
-#ifdef __vita__
-	mBufVboNumTris++;
-#else
     if (++mBufVboNumTris == MAX_TRI_BUFFER) {
-        // if (++mBufVbo_num_tris == 1) {
         Flush();
     }
-#endif
 }
 
 void Interpreter::GfxSpGeometryMode(uint32_t clear, uint32_t set) {

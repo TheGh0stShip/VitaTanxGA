@@ -32,10 +32,14 @@ btga_vita_create_renderer(std::uint8_t*, ultramodern::renderer::WindowHandle, bo
 
 namespace {
 constexpr std::size_t kRomSize = 8U * 1024U * 1024U;
-constexpr std::size_t kAudioFrames = 1024;
+// Keep the hardware block short: 1024 frames made every underrun and backlog
+// audible for another 21 ms.  256 is supported by the Vita audio service and
+// gives the producer four opportunities per old-sized block to recover.
+constexpr std::size_t kAudioFrames = 256;
 constexpr std::size_t kAudioRingFrames = 16384;
 constexpr std::uint32_t kVitaAudioRate = 48000;
-constexpr std::size_t kAudioSoftCapFrames = kVitaAudioRate / 5;
+constexpr std::size_t kAudioTargetFrames = kAudioFrames * 3;
+constexpr std::size_t kAudioSoftCapFrames = kAudioFrames * 8;
 constexpr int kControllerCount = 4;
 constexpr std::uint8_t kExpectedSha1[20] = {
     0x80, 0x52, 0x48, 0xfb, 0x0a, 0x0e, 0xe6, 0x94, 0xca, 0xd8,
@@ -225,6 +229,16 @@ int run_audio(SceSize, void*) {
     while (audio_running.load()) {
         std::uint32_t read = audio_read.load(std::memory_order_relaxed);
         const std::uint32_t write = audio_write.load(std::memory_order_acquire);
+        const std::size_t queued =
+            write >= read ? write - read : kAudioRingFrames - read + write;
+        // The audio thread is the sole owner of the read cursor.  Catch up
+        // here instead of making the producer race it or preserving old sound
+        // after a slow graphics frame.  Keep a small cushion for scheduling
+        // jitter while always favoring current game audio.
+        if (queued > kAudioSoftCapFrames) {
+            const std::size_t discard = queued - kAudioTargetFrames;
+            read = static_cast<std::uint32_t>((read + discard) % kAudioRingFrames);
+        }
         for (std::size_t frame = 0; frame < kAudioFrames; ++frame) {
             if (read != write) {
                 block[frame * 2] = audio_ring[read * 2];
@@ -268,8 +282,8 @@ void queue_audio(std::int16_t* samples, std::size_t sample_count) {
     const std::uint32_t read = audio_read.load(std::memory_order_acquire);
     const std::size_t queued =
         write >= read ? write - read : kAudioRingFrames - read + write;
-    // Transitions and skipped cutscenes can submit faster than real time. Do
-    // not let stale effects accumulate behind more than 200 ms of Vita audio.
+    // Bound producer work during transitions.  The consumer drops old frames
+    // if this short limit is exceeded, so this only prevents ring saturation.
     if (queued > kAudioSoftCapFrames) return;
     std::lock_guard lock{resampler_mutex};
     for (std::size_t frame = 0; frame < frames; ++frame) {
