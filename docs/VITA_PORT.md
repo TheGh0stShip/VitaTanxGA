@@ -51,6 +51,10 @@ The actor-world loader also distinguishes the retail entry-30 navigation/event
 modes from its mode-1/mode-2 blocking volumes. Those signed big-endian local
 bounds retain their placement yaw and stop player/AI tanks without globally
 packing or casting the recovered records.
+Collision-requesting entry kinds additionally derive rotated local bounds from
+their decoded model vertices. SF Airport currently corpus-checks 556 base-world
+and 24 actor-world model bounds; the largest campaign pair remains within the
+fixed 2,048-entry Vita allocation.
 Renderable actor entry kinds are traversed from the companion world alongside
 the base scene. Initial models for recovered dynamic structures are visible,
 while a placement-radius gate prevents later campaign maps with thousands of

@@ -67,7 +67,7 @@ enum { kMaximumPickups = BTGA_MAX_PICKUPS };
 static BtgaWorldPickup s_pickups[kMaximumPickups];
 static uint16_t s_pickup_model_indices[kMaximumPickups];
 static size_t s_pickup_count;
-enum { kMaximumCollisions = 128 };
+enum { kMaximumCollisions = 2048 };
 static BtgaWorldCollision s_collisions[kMaximumCollisions];
 static size_t s_collision_count;
 
@@ -644,13 +644,30 @@ static bool load_mission_world(uint8_t mission) {
         if (valid) {
             size_t world_collision_count = 0;
             size_t spawn_collision_count = 0;
+            size_t world_model_collision_count = 0;
+            size_t spawn_model_collision_count = 0;
             valid = btga_world_collisions(&s_world_components, s_collisions,
                         kMaximumCollisions, &world_collision_count) &&
                     btga_world_collisions(&s_spawn_components,
                         s_collisions + world_collision_count,
                         kMaximumCollisions - world_collision_count,
-                        &spawn_collision_count);
-            s_collision_count = world_collision_count + spawn_collision_count;
+                        &spawn_collision_count) &&
+                    btga_scene_collisions(&s_world_components,
+                        s_geometry_pool.data, s_geometry_pool.size,
+                        s_collisions + world_collision_count +
+                            spawn_collision_count,
+                        kMaximumCollisions - world_collision_count -
+                            spawn_collision_count,
+                        &world_model_collision_count) &&
+                    btga_scene_collisions(&s_spawn_components,
+                        s_geometry_pool.data, s_geometry_pool.size,
+                        s_collisions + world_collision_count +
+                            spawn_collision_count + world_model_collision_count,
+                        kMaximumCollisions - world_collision_count -
+                            spawn_collision_count - world_model_collision_count,
+                        &spawn_model_collision_count);
+            s_collision_count = world_collision_count + spawn_collision_count +
+                world_model_collision_count + spawn_model_collision_count;
         }
         for (index = 0; valid && index < s_pickup_count; index++) {
             uint16_t model_id;

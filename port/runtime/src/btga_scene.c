@@ -24,6 +24,15 @@ static bool renderable_kind(uint8_t kind) {
     }
 }
 
+static bool collision_kind(uint8_t kind) {
+    switch (kind) {
+        case 1: case 2: case 11: case 14: case 22: case 35: case 42: case 43:
+            return true;
+        default:
+            return false;
+    }
+}
+
 static bool visit_local_triangle(const BtgaVertex vertices[3], void *opaque) {
     SceneVisitContext *context = opaque;
     unsigned int index;
@@ -162,4 +171,89 @@ bool btga_scene_visit(const BtgaWorldComponents *world,
     return btga_scene_visit_near(world, geometry_pool, geometry_pool_size,
                                  0.0f, 0.0f, 0.0f, triangle_limit, visitor,
                                  visitor_context, summary);
+}
+
+typedef struct CollisionBoundsContext {
+    int16_t min_x, min_y, min_z;
+    int16_t max_x, max_y, max_z;
+    bool initialized;
+} CollisionBoundsContext;
+
+static bool collect_collision_bounds(const BtgaPlacedTriangle *triangle,
+                                     void *opaque) {
+    CollisionBoundsContext *bounds = opaque;
+    unsigned int index;
+    for (index = 0; index < 3; index++) {
+        const BtgaVertex *vertex = &triangle->vertices[index];
+        if (!bounds->initialized) {
+            bounds->min_x = bounds->max_x = vertex->x;
+            bounds->min_y = bounds->max_y = vertex->y;
+            bounds->min_z = bounds->max_z = vertex->z;
+            bounds->initialized = true;
+        } else {
+            if (vertex->x < bounds->min_x) bounds->min_x = vertex->x;
+            if (vertex->y < bounds->min_y) bounds->min_y = vertex->y;
+            if (vertex->z < bounds->min_z) bounds->min_z = vertex->z;
+            if (vertex->x > bounds->max_x) bounds->max_x = vertex->x;
+            if (vertex->y > bounds->max_y) bounds->max_y = vertex->y;
+            if (vertex->z > bounds->max_z) bounds->max_z = vertex->z;
+        }
+    }
+    return true;
+}
+
+bool btga_scene_collisions(const BtgaWorldComponents *world,
+                           const uint8_t *geometry_pool,
+                           size_t geometry_pool_size,
+                           BtgaWorldCollision *collisions, size_t capacity,
+                           size_t *collision_count) {
+    BtgaWorldSummary summary;
+    enum { kMaximumCollisionModels = 512 };
+    CollisionBoundsContext model_bounds[kMaximumCollisionModels] = {{0}};
+    bool model_computed[kMaximumCollisionModels] = {false};
+    uint32_t placement_index;
+    size_t count = 0;
+    if (collision_count == NULL || (capacity != 0 && collisions == NULL) ||
+        geometry_pool == NULL || !btga_world_validate(world, &summary))
+        return false;
+    for (placement_index = 0; placement_index < summary.placement_count;
+         placement_index++) {
+        const uint8_t *placement = world->placements + placement_index * 12;
+        uint32_t definition_offset = btga_read_be_u32(placement + 8);
+        const uint8_t *definition;
+        uint16_t model_index;
+        uint32_t triangle_count;
+        uint8_t part;
+        CollisionBoundsContext bounds;
+        if (definition_offset > world->definitions_size ||
+            world->definitions_size - definition_offset < 4) continue;
+        definition = world->definitions + definition_offset;
+        if (!collision_kind(definition[0])) continue;
+        model_index = read_be_u16(definition + 2);
+        if (summary.model_count > kMaximumCollisionModels ||
+            model_index >= summary.model_count || count >= capacity) return false;
+        if (!model_computed[model_index]) {
+            for (part = 0; part < world->models[(size_t)model_index * 16]; part++) {
+                if (!btga_model_visit(world, model_index, part, 0.0f, 0.0f,
+                                      0.0f, 0, geometry_pool,
+                                      geometry_pool_size, UINT32_MAX,
+                                      collect_collision_bounds,
+                                      &model_bounds[model_index],
+                                      &triangle_count)) return false;
+            }
+            model_computed[model_index] = true;
+        }
+        bounds = model_bounds[model_index];
+        if (!bounds.initialized) return false;
+        collisions[count++] = (BtgaWorldCollision){
+            (int16_t)read_be_u16(placement),
+            (int16_t)read_be_u16(placement + 2),
+            (int16_t)read_be_u16(placement + 4),
+            read_be_u16(placement + 6),
+            bounds.min_x, bounds.min_y, bounds.min_z,
+            bounds.max_x, bounds.max_y, bounds.max_z,
+        };
+    }
+    *collision_count = count;
+    return true;
 }

@@ -74,8 +74,10 @@ int main(int argc, char **argv) {
     uint16_t tank_model_index;
     uint32_t tank_triangles;
     BtgaTankDefinition enemy_tank;
-    BtgaWorldCollision collisions[128];
+    BtgaWorldCollision collisions[2048];
     size_t collision_count;
+    size_t world_model_collision_count;
+    size_t actor_model_collision_count;
     int result = 1;
 
     if (argc != 11) {
@@ -330,14 +332,21 @@ int main(int argc, char **argv) {
                           100000, NULL, NULL, &actor_scene_summary) ||
         !btga_world_collisions(&spawn_components, collisions,
                                sizeof(collisions) / sizeof(collisions[0]),
-                               &collision_count)) {
+                               &collision_count) ||
+        !btga_scene_collisions(&components, geometry.data, geometry.size,
+                               collisions, 2048,
+                               &world_model_collision_count) ||
+        !btga_scene_collisions(&spawn_components, geometry.data, geometry.size,
+                               collisions, 2048,
+                               &actor_model_collision_count)) {
         fprintf(stderr, "actor scene traversal failed\n");
         goto cleanup;
     }
     printf("actor scene traversed: %u placements, %u triangles, "
-           "%zu blocking bounds\n",
+           "%zu explicit bounds, %zu/%zu model bounds\n",
            actor_scene_summary.renderable_placement_count,
-           actor_scene_summary.visited_triangle_count, collision_count);
+           actor_scene_summary.visited_triangle_count, collision_count,
+           world_model_collision_count, actor_model_collision_count);
     printf("scene traversed: %u placements, %u triangles\n",
            scene_summary.renderable_placement_count,
            scene_summary.visited_triangle_count);
@@ -345,7 +354,8 @@ int main(int argc, char **argv) {
         scene_summary.visited_triangle_count != 7030 ||
         actor_scene_summary.renderable_placement_count != 45 ||
         actor_scene_summary.visited_triangle_count != 506 ||
-        collision_count != 0) {
+        collision_count != 0 || world_model_collision_count != 556 ||
+        actor_model_collision_count != 24) {
         fprintf(stderr, "placed scene totals disagree with the verified corpus\n");
         goto cleanup;
     }

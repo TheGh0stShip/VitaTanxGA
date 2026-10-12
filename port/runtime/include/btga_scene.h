@@ -41,5 +41,10 @@ bool btga_model_visit(const BtgaWorldComponents *world, uint16_t model_index,
                       const uint8_t *geometry_pool, size_t geometry_pool_size,
                       uint32_t triangle_limit, BtgaPlacedTriangleVisitor visitor,
                       void *context, uint32_t *visited_triangle_count);
+bool btga_scene_collisions(const BtgaWorldComponents *world,
+                           const uint8_t *geometry_pool,
+                           size_t geometry_pool_size,
+                           BtgaWorldCollision *collisions, size_t capacity,
+                           size_t *collision_count);
 
 #endif
