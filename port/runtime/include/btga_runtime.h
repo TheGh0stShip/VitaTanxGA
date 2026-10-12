@@ -34,6 +34,8 @@ typedef enum BtgaRuntimeScreen {
     BTGA_SCREEN_TITLE = 0,
     BTGA_SCREEN_GAMEPLAY = 1,
     BTGA_SCREEN_PAUSED = 2,
+    BTGA_SCREEN_VICTORY = 3,
+    BTGA_SCREEN_DEFEAT = 4,
 } BtgaRuntimeScreen;
 
 typedef struct BtgaPlayer {
@@ -103,5 +105,6 @@ bool btga_runtime_add_enemy(BtgaRuntime *runtime, float x, float y, float z,
                             uint16_t yaw);
 void btga_runtime_update(BtgaRuntime *runtime, const BtgaInput *input,
                          uint32_t elapsed_us);
+uint32_t btga_runtime_active_enemies(const BtgaRuntime *runtime);
 
 #endif

@@ -146,6 +146,18 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
     runtime->camera.z += (follow_z - runtime->camera.z) * 0.18f;
     runtime->camera.yaw = runtime->player.yaw;
     runtime->camera.pitch = -0.42f;
+    if (runtime->player.health == 0) runtime->screen = BTGA_SCREEN_DEFEAT;
+    else if (btga_runtime_active_enemies(runtime) == 0)
+        runtime->screen = BTGA_SCREEN_VICTORY;
+}
+
+uint32_t btga_runtime_active_enemies(const BtgaRuntime *runtime) {
+    uint32_t count = 0;
+    unsigned int index;
+    if (runtime == NULL) return 0;
+    for (index = 0; index < BTGA_MAX_ENEMIES; index++)
+        if (runtime->enemies[index].active) count++;
+    return count;
 }
 
 bool btga_runtime_add_enemy(BtgaRuntime *runtime, float x, float y, float z,
@@ -245,6 +257,11 @@ void btga_runtime_update(BtgaRuntime *runtime, const BtgaInput *input,
         runtime->screen = BTGA_SCREEN_GAMEPLAY;
         runtime->pending_pressed &= ~BTGA_BUTTON_START;
     } else if (runtime->screen == BTGA_SCREEN_PAUSED &&
+               (input->pressed & BTGA_BUTTON_CANCEL) != 0) {
+        runtime->screen = BTGA_SCREEN_TITLE;
+        runtime->pending_pressed &= ~BTGA_BUTTON_CANCEL;
+    } else if ((runtime->screen == BTGA_SCREEN_VICTORY ||
+                runtime->screen == BTGA_SCREEN_DEFEAT) &&
                (input->pressed & BTGA_BUTTON_CANCEL) != 0) {
         runtime->screen = BTGA_SCREEN_TITLE;
         runtime->pending_pressed &= ~BTGA_BUTTON_CANCEL;

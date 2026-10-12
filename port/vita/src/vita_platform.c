@@ -651,10 +651,12 @@ void vita_platform_draw(const BtgaRuntime *runtime) {
                                   (unsigned long)world->placement_count,
                                   (unsigned long)world->model_count);
         }
-    } else {
+    } else if (runtime->screen == BTGA_SCREEN_GAMEPLAY ||
+               runtime->screen == BTGA_SCREEN_PAUSED) {
         vita2d_pgf_draw_textf(s_font, 18, 30, kColorWhite, 0.64f,
-                              "ARMOR %u   AMMO %u   MESH %lu",
+                              "ARMOR %u   AMMO %u   ENEMY %lu   MESH %lu",
                               runtime->player.health, runtime->player.ammo,
+                              (unsigned long)btga_runtime_active_enemies(runtime),
                               (unsigned long)visible_triangles);
         vita2d_pgf_draw_text(s_font, 18, 52, kColorGray, 0.55f,
                              "LEFT: drive  RIGHT: turret  R: fire  START: pause");
@@ -664,6 +666,12 @@ void vita_platform_draw(const BtgaRuntime *runtime) {
             vita2d_pgf_draw_text(s_font, 340, 292, kColorGray, 0.65f,
                                  "START: resume   CIRCLE: title");
         }
+    } else {
+        const char *result = runtime->screen == BTGA_SCREEN_VICTORY
+            ? "MISSION COMPLETE" : "TANK DESTROYED";
+        vita2d_pgf_draw_text(s_font, 300, 238, kColorWhite, 1.2f, result);
+        vita2d_pgf_draw_text(s_font, 350, 292, kColorGray, 0.65f,
+                             "CIRCLE: return to title");
     }
 }
 
