@@ -113,11 +113,16 @@ static std::string GetPathWithoutFileName(char* filePath) {
 }
 
 constexpr size_t MAX_TRI_BUFFER = 256;
+// Position (4), two texture coordinate/clamp groups (up to 8), fog and
+// grayscale (8), and seven RGBA combiner inputs (28) require at most 48
+// floats per vertex.  Leave headroom while keeping the CPU staging buffer
+// small; DrawTriangles copies only the populated portion to GXM memory.
+constexpr size_t MAX_FLOATS_PER_VERTEX = 64;
 
 Interpreter::Interpreter() {
     mRsp = new RSP();
     mRdp = new RDP();
-    mBufVbo = new float[MAX_TRI_BUFFER * (32 * 3)];
+    mBufVbo = new float[MAX_TRI_BUFFER * (MAX_FLOATS_PER_VERTEX * 3)];
 }
 
 Interpreter::~Interpreter() {

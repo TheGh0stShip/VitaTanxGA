@@ -130,6 +130,12 @@ static const char* shader_item_to_str(uint32_t item, bool with_alpha, bool only_
                 return with_alpha || !inputs_have_alpha ? "vInput3" : "vInput3.rgb";
             case SHADER_INPUT_4:
                 return with_alpha || !inputs_have_alpha ? "vInput4" : "vInput4.rgb";
+            case SHADER_INPUT_5:
+                return with_alpha || !inputs_have_alpha ? "vInput5" : "vInput5.rgb";
+            case SHADER_INPUT_6:
+                return with_alpha || !inputs_have_alpha ? "vInput6" : "vInput6.rgb";
+            case SHADER_INPUT_7:
+                return with_alpha || !inputs_have_alpha ? "vInput7" : "vInput7.rgb";
             case SHADER_TEXEL0:
                 return first_cycle ? (with_alpha ? "texVal0" : "texVal0.rgb")
                                    : (with_alpha ? "texVal1" : "texVal1.rgb");
@@ -172,6 +178,12 @@ static const char* shader_item_to_str(uint32_t item, bool with_alpha, bool only_
                 return "vInput3.a";
             case SHADER_INPUT_4:
                 return "vInput4.a";
+            case SHADER_INPUT_5:
+                return "vInput5.a";
+            case SHADER_INPUT_6:
+                return "vInput6.a";
+            case SHADER_INPUT_7:
+                return "vInput7.a";
             case SHADER_TEXEL0:
                 return first_cycle ? "texVal0.a" : "texVal1.a";
             case SHADER_TEXEL0A:
