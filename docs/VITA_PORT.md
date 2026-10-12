@@ -97,7 +97,9 @@ make vita
 The resulting package is
 `port/vita/build-full-recomp/VitaTanxGA-recomp.vpk`. `make vita-check` is an
 alias for the same primary cross-build gate and does not perform redundant
-prototype builds.
+prototype builds. The gate also runs the host-side Controller Pak filesystem
+test, covering multi-page profile I/O, standard label placement, image import,
+and recovery from the backup inode table before the Vita package is accepted.
 
 The older `port/runtime` portable prototype is retained for reference and
 loader tests only. It is available through `make vita-legacy`; it is not the

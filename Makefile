@@ -3,7 +3,7 @@ ROM ?= baseroms/us/baserom.z64
 VITA_ASSETS := assets/extracted/us/vita
 VITA_BUILD := port/vita/build
 
-.PHONY: all verify-rom runtime-test runtime-asset-test runtime-script-asset-test runtime-campaign-asset-test vita-assets vita vita-legacy vita-recomp-bootstrap vita-recomp-prepare vita-recomp-check vita-recomp-runtime-check vita-recomp-app vita-check clean
+.PHONY: all verify-rom runtime-test runtime-asset-test runtime-script-asset-test runtime-campaign-asset-test controller-pak-test vita-assets vita vita-legacy vita-recomp-bootstrap vita-recomp-prepare vita-recomp-check vita-recomp-runtime-check vita-recomp-app vita-check clean
 
 all: vita-check
 
@@ -66,6 +66,13 @@ runtime-campaign-asset-test: vita-assets
 	/tmp/vitatanxga-campaign-asset-test \
 		$(VITA_ASSETS)/campaign/campaign_text.bin \
 		$(VITA_ASSETS)/campaign/campaign_config.bin
+
+controller-pak-test:
+	$(CXX) -std=c++20 -Wall -Wextra -Werror -Wpedantic \
+		-Iport/vita/recomp/include port/vita/recomp/controller_pak.cpp \
+		port/vita/recomp/tests/controller_pak_test.cpp \
+		-o /tmp/vitatanxga-controller-pak-test
+	/tmp/vitatanxga-controller-pak-test
 
 vita-assets: verify-rom
 	$(PYTHON) tools/extract_world_pools.py $(VITA_ASSETS)/world-pools --rom $(ROM)
@@ -153,7 +160,7 @@ vita-recomp-app: vita-recomp-prepare
 		grep -q 'eboot.bin' || exit 1
 	@echo "Built full translated-game VPK: $(VITA_BUILD)-full-recomp/VitaTanxGA-recomp.vpk"
 
-vita: vita-recomp-app
+vita: controller-pak-test vita-recomp-app
 
 # The primary gate builds the real translated game exactly once.  The portable
 # prototype and its extracted-asset tests remain available through
