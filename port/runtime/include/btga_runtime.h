@@ -38,6 +38,7 @@ typedef enum BtgaRuntimeScreen {
     BTGA_SCREEN_VICTORY = 3,
     BTGA_SCREEN_DEFEAT = 4,
     BTGA_SCREEN_INTRO = 5,
+    BTGA_SCREEN_BRIEFING = 6,
 } BtgaRuntimeScreen;
 
 typedef struct BtgaPlayer {

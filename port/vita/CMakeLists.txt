@@ -21,6 +21,7 @@ set(VITA_VERSION "00.01")
 
 add_executable(${PROJECT_NAME}
   ../runtime/src/btga_runtime.c
+  ../runtime/src/btga_campaign.c
   ../runtime/src/btga_tank.c
   ../runtime/src/btga_script.c
   ../runtime/src/btga_world.c
@@ -40,6 +41,13 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 target_compile_features(${PROJECT_NAME} PRIVATE c_std_11)
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wpedantic)
+# Leave room between RX and RW load segments for vita-elf-create's SCE
+# metadata. GNU ld's default adjacent-page layout becomes invalid once the
+# executable text approaches the next 64 KiB boundary.
+target_link_options(${PROJECT_NAME} PRIVATE
+  "-Wl,--section-start=.init_array=0x8103F000"
+  "-Wl,-Tdata=0x81040000"
+)
 target_link_libraries(${PROJECT_NAME} PRIVATE
   vita2d
   SceCtrl_stub

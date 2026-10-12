@@ -30,8 +30,9 @@ make vita-check
 
 The package is written to `port/vita/build/vitatanxga.vpk`. `make vita`
 first verifies the supplied ROM and stages decoded LZARI worlds and images,
-the shared texture/state/geometry pools, scripts, and libmus data into the
-ignored `assets/extracted/us/vita` tree.
+the shared texture/state/geometry pools, scripts, libmus data, and original
+fixed-width campaign text table into the ignored `assets/extracted/us/vita`
+tree.
 Those generated files are packaged under `app0:assets/`; the ROM itself is
 never packaged or committed. The executable runs a bounded 30 Hz fixed-step
 simulation, maps Vita controls to portable button/analog state, and lets the
@@ -58,6 +59,11 @@ shields, bouncing betties, flamethrower, cloaking, grenades, tank bucks, and
 radar. Collected models leave the scene, HUD feedback names the item, and a
 mission restart restores the full placement set and clears its inventory.
 
+The frontend executes the recovered opening narrative and then displays the
+retail mission-zero location, objective, and complete briefing through the
+portable campaign-table reader before deploying the player. The same recovered
+objective remains visible during gameplay.
+
 The portable script loader validates the first campaign script header and
 all 41 split streams using the retail command-width rules. The full 23,483
 command corpus is checked for bounded operands, terminated strings, per-stream
@@ -74,7 +80,8 @@ inputs and all 1,287 geometry/state references plus all 1,285 textured
 references in the extracted first-level data,
 The gate additionally validates all 23,483 commands in the extracted first
 campaign script and executes the opening stream to its terminator while
-requiring all seven retail text events, then validates that the port ELF is
+requiring all seven retail text events. It also checks the extracted campaign
+table against the full first briefing, then validates that the port ELF is
 32-bit ARMv7-A and uses the same VFP-register calling convention as the
 installed VitaSDK. This is a cross-build gate only; it is not a
 physical-hardware validation claim. Do not install or launch it on hardware

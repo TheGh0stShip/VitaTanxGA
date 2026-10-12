@@ -4,6 +4,7 @@
 #include "btga_texture.h"
 #include "btga_tank.h"
 #include "btga_script.h"
+#include "btga_campaign.h"
 
 #include <psp2/ctrl.h>
 #include <psp2/kernel/processmgr.h>
@@ -34,6 +35,8 @@ typedef struct LoadedFile {
 } LoadedFile;
 
 static LoadedFile s_intro_stream;
+static LoadedFile s_campaign_text_file;
+static BtgaMissionText s_mission_text;
 static LoadedFile s_world_files[7];
 static LoadedFile s_common_files[7];
 static LoadedFile s_spawn_files[7];
@@ -283,6 +286,14 @@ static bool validate_first_mission(void) {
     s_mission_stream_count = stream_count;
     s_mission_command_count = command_count;
     return true;
+}
+
+static bool load_campaign_text(void) {
+    return load_file("app0:assets/campaign/campaign_text.bin",
+                     &s_campaign_text_file) &&
+           btga_campaign_mission_text(s_campaign_text_file.data,
+                                      s_campaign_text_file.size, 0,
+                                      &s_mission_text);
 }
 
 static bool load_first_world(void) {
@@ -630,7 +641,8 @@ bool vita_platform_startup(void) {
         vita2d_fini();
         return false;
     }
-    s_world_ready = load_first_world() && validate_first_mission();
+    s_world_ready = load_first_world() && validate_first_mission() &&
+                    load_campaign_text();
     return true;
 }
 
@@ -802,6 +814,15 @@ void vita_platform_draw(const BtgaRuntime *runtime) {
             draw_wrapped_text(runtime->intro.text, 70, 238, 820, color, 0.72f);
         vita2d_pgf_draw_text(s_font, 70, 486, kColorGray, 0.58f,
                              "CROSS: continue   CIRCLE: skip intro");
+    } else if (runtime->screen == BTGA_SCREEN_BRIEFING) {
+        vita2d_pgf_draw_text(s_font, 70, 90, kColorOrange, 1.0f,
+                             s_mission_text.location.text);
+        draw_wrapped_text(s_mission_text.objective.text, 70, 170, 820,
+                          kColorWhite, 0.82f);
+        draw_wrapped_text(s_mission_text.briefing.text, 70, 270, 820,
+                          kColorGray, 0.68f);
+        vita2d_pgf_draw_text(s_font, 70, 486, kColorGray, 0.58f,
+                             "CROSS: deploy   CIRCLE: title");
     } else if (runtime->screen == BTGA_SCREEN_GAMEPLAY ||
                runtime->screen == BTGA_SCREEN_PAUSED) {
         vita2d_pgf_draw_textf(s_font, 18, 30, kColorWhite, 0.64f,
@@ -812,8 +833,8 @@ void vita_platform_draw(const BtgaRuntime *runtime) {
                               (unsigned long)btga_runtime_active_pickups(runtime));
         vita2d_pgf_draw_text(s_font, 18, 52, kColorGray, 0.55f,
                              "LEFT: drive  RIGHT: turret  R: fire  START: pause");
-        vita2d_pgf_draw_text(s_font, 18, 78, kColorOrange, 0.55f,
-                             "OBJECTIVE: DESTROY ALL INVADING TANKS");
+        vita2d_pgf_draw_textf(s_font, 18, 78, kColorOrange, 0.55f,
+                              "OBJECTIVE: %s", s_mission_text.objective.text);
         if (runtime->pickup_message_ticks != 0)
             vita2d_pgf_draw_textf(s_font, 330, 500, kColorOrange, 0.72f,
                                   "PICKED UP %s",
@@ -863,6 +884,8 @@ void vita_platform_shutdown(void) {
     s_texture_pool = (LoadedFile){0};
     free(s_intro_stream.data);
     s_intro_stream = (LoadedFile){0};
+    free(s_campaign_text_file.data);
+    s_campaign_text_file = (LoadedFile){0};
     free(s_gameplay_data.data);
     s_gameplay_data = (LoadedFile){0};
     vita2d_fini();

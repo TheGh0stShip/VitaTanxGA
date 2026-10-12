@@ -468,11 +468,19 @@ void btga_runtime_update(BtgaRuntime *runtime, const BtgaInput *input,
                                                             data, size);
         }
         runtime->screen = runtime->intro_ready ? BTGA_SCREEN_INTRO
-                                               : BTGA_SCREEN_GAMEPLAY;
+                                               : BTGA_SCREEN_BRIEFING;
         runtime->pending_pressed &= ~BTGA_BUTTON_CONFIRM;
     } else if (runtime->screen == BTGA_SCREEN_INTRO &&
                (input->pressed & BTGA_BUTTON_CANCEL) != 0) {
+        runtime->screen = BTGA_SCREEN_BRIEFING;
+        runtime->pending_pressed &= ~BTGA_BUTTON_CANCEL;
+    } else if (runtime->screen == BTGA_SCREEN_BRIEFING &&
+               (input->pressed & BTGA_BUTTON_CONFIRM) != 0) {
         runtime->screen = BTGA_SCREEN_GAMEPLAY;
+        runtime->pending_pressed &= ~BTGA_BUTTON_CONFIRM;
+    } else if (runtime->screen == BTGA_SCREEN_BRIEFING &&
+               (input->pressed & BTGA_BUTTON_CANCEL) != 0) {
+        runtime->screen = BTGA_SCREEN_TITLE;
         runtime->pending_pressed &= ~BTGA_BUTTON_CANCEL;
     } else if (runtime->screen == BTGA_SCREEN_GAMEPLAY &&
                (input->pressed & BTGA_BUTTON_START) != 0) {
@@ -506,7 +514,7 @@ void btga_runtime_update(BtgaRuntime *runtime, const BtgaInput *input,
                 &runtime->intro,
                 (runtime->pending_pressed & BTGA_BUTTON_CONFIRM) != 0);
             if (result == BTGA_SCRIPT_FINISHED || result == BTGA_SCRIPT_INVALID)
-                runtime->screen = BTGA_SCREEN_GAMEPLAY;
+                runtime->screen = BTGA_SCREEN_BRIEFING;
         }
         runtime->pending_pressed = 0;
         runtime->accumulator_us -= BTGA_SIMULATION_STEP_US;

@@ -28,8 +28,10 @@ The repository currently produces an installable PS Vita VPK that:
   with retail health, ammunition, weapon inventory, tank-buck, and radar effects;
 - derives navigation heights from the placed retail level geometry;
 - loads and validates the first extracted world's big-endian component tables;
-- packages decoded worlds, shared world pools, images, scripts, and libmus
-  audio resources; and
+- packages decoded worlds, shared world pools, images, scripts, libmus audio
+  resources, and the original campaign text table;
+- presents the recovered San Francisco Airport location, objective, and full
+  mission briefing between the opening narrative and deployment;
 - parses the first retail campaign script's 41 streams and 23,483
   variable-width commands, and executes its recovered seven-card opening
   narrative with original 30 Hz waits on the portable runtime boundary;
@@ -88,7 +90,8 @@ tools\capture_vita3k_windows.ps1 `
 2. extracts decoded game resources into the ignored
    `assets/extracted/us/vita` directory;
 3. validates the extracted first-level world and every referenced geometry,
-   state, and texture chunk through the portable C loaders;
+   state, texture, spawn, pickup, and campaign-text record through the portable
+   C loaders;
 4. cross-compiles the Vita executable;
 5. packages the extracted resources into the VPK;
 6. runs the host-side portable-runtime tests; and

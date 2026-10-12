@@ -13,6 +13,7 @@ shift
 
 header="$($READELF -h "$ELF")"
 attributes="$($READELF -A "$ELF")"
+load_ranges="$($READELF -lW "$ELF" | awk '$1 == "LOAD" { print $3, $5 }')"
 
 printf '%s\n' "$header" | grep -q 'Class:.*ELF32'
 printf '%s\n' "$header" | grep -q 'Machine:.*ARM'
@@ -27,4 +28,10 @@ for library in "$@"; do
     fi
 done
 
-echo "Verified Vita ELF: ELF32 ARMv7-A with VFP-register hard-float ABI"
+set -- $load_ranges
+if [ "$#" -lt 4 ] || [ $(( $3 - ($1 + $2) )) -lt 4096 ]; then
+    echo "Vita ELF load segments leave insufficient room for SCE metadata" >&2
+    exit 1
+fi
+
+echo "Verified Vita ELF: ELF32 ARMv7-A hard-float ABI and safe SCE segment gap"

@@ -9,6 +9,7 @@ int btga_material_tests(void);
 int btga_texture_tests(void);
 int btga_tank_tests(void);
 int btga_script_tests(void);
+int btga_campaign_tests(void);
 
 int main(void) {
     BtgaRuntime runtime;
@@ -41,6 +42,9 @@ int main(void) {
     assert(runtime.enemies[0].x == 100.0f && runtime.enemies[0].health == 100);
     input.pressed = BTGA_BUTTON_CANCEL;
     btga_runtime_update(&runtime, &input, 0);
+    assert(runtime.screen == BTGA_SCREEN_BRIEFING);
+    input.pressed = BTGA_BUTTON_CONFIRM;
+    btga_runtime_update(&runtime, &input, 0);
     assert(runtime.screen == BTGA_SCREEN_GAMEPLAY);
     runtime.player.health = 50;
 
@@ -72,5 +76,6 @@ int main(void) {
     btga_texture_tests();
     btga_tank_tests();
     btga_script_tests();
+    btga_campaign_tests();
     return 0;
 }
