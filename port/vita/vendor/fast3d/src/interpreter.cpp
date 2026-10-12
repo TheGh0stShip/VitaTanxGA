@@ -5648,8 +5648,6 @@ void Interpreter::RunGuiOnly() {
     mGfxFrameBuffer = 0;
 
     if (mRendersToFb) {
-        mRapi->StartDrawToFramebuffer(0, 1);
-        mRapi->ClearFramebuffer(true, true);
         mGfxFrameBuffer = (uintptr_t)mRapi->GetFramebufferTextureId(mGameFb);
     } else if (mFbActive) {
         // Failsafe reset to main framebuffer to prevent softlocking the renderer
@@ -5696,8 +5694,6 @@ void Interpreter::Run(Gfx* commands, const robin_hood::unordered_map<Mtx*, MtxF>
     currentDir = std::stack<std::string>();
 
     if (mRendersToFb) {
-        mRapi->StartDrawToFramebuffer(0, 1);
-        mRapi->ClearFramebuffer(true, true);
         mGfxFrameBuffer = (uintptr_t)mRapi->GetFramebufferTextureId(mGameFb);
     } else if (mFbActive) {
         // Failsafe reset to main framebuffer to prevent softlocking the renderer
@@ -5709,6 +5705,23 @@ void Interpreter::Run(Gfx* commands, const robin_hood::unordered_map<Mtx*, MtxF>
 }
 
 void Interpreter::EndFrame() {
+    if (mRendersToFb) {
+        // The desktop backend hands mGfxFrameBuffer to its GUI compositor.
+        // Vita has no such layer, so resolve the native-resolution game FBO
+        // directly into the configured output viewport before presenting.
+        mRapi->StartDrawToFramebuffer(0, 1.0f);
+        mRapi->ClearFramebuffer(true, true);
+        mRapi->CopyFramebuffer(0, mGameFb,
+                               0, 0,
+                               static_cast<int>(mCurDimensions.width),
+                               static_cast<int>(mCurDimensions.height),
+                               mGameWindowViewport.x,
+                               mGameWindowViewport.y,
+                               mGameWindowViewport.x +
+                                   static_cast<int>(mGameWindowViewport.width),
+                               mGameWindowViewport.y +
+                                   static_cast<int>(mGameWindowViewport.height));
+    }
     mRapi->EndFrame();
     mWapi->SwapBuffersBegin();
     mRapi->FinishRender();
@@ -5841,6 +5854,13 @@ void Interpreter::UnregisterBlendedTexture(const char* name) {
 void Interpreter::SetNativeDimensions(float width, float height) {
     mNativeDimensions.width = width;
     mNativeDimensions.height = height;
+}
+
+void Interpreter::SetRenderingDimensions(uint32_t width, uint32_t height) {
+    mCurDimensions.width = width;
+    mCurDimensions.height = height;
+    mCurDimensions.aspect_ratio = static_cast<float>(width) /
+                                   static_cast<float>(height);
 }
 
 void Interpreter::SetDisplayConfiguration(uint32_t width, uint32_t height, int32_t x, int32_t y, float aspectDelta) {

@@ -465,6 +465,7 @@ class Interpreter {
     bool ResolveStagedTextureSource(const uint8_t* stagedAddress, uint32_t* rdramAddress) const;
 
     void SetNativeDimensions(float width, float height);
+    void SetRenderingDimensions(uint32_t width, uint32_t height);
     void SetDisplayConfiguration(uint32_t width, uint32_t height, int32_t x, int32_t y, float aspectDelta);
     void GetCurDimensions(uint32_t* width, uint32_t* height);
 

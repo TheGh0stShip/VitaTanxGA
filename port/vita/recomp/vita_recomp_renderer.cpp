@@ -77,8 +77,12 @@ public:
         interpreter_->SetRdramMemory(rdram_, btga::vita::kRdramSize32);
         btga_vita_log("Fast3D RDRAM bound");
         interpreter_->SetNativeDimensions(320.0F, 240.0F);
-        interpreter_->SetDisplayConfiguration(960, 544, 0, 0,
-                                              (4.0F / 3.0F) / (960.0F / 544.0F));
+        // Keep the N64 render workload at its native size and use the GPU to
+        // scale the completed frame into a centered 4:3 Vita viewport.
+        // Rendering every primitive at 960x544 costs nearly seven times the
+        // original fill rate and starves both graphics and audio on Vita.
+        interpreter_->SetDisplayConfiguration(726, 544, 117, 0, 1.0F);
+        interpreter_->SetRenderingDimensions(320, 240);
         btga_vita_log("Fast3D display configured");
         bridge_.SetInterpreter(interpreter_.get());
         Fast::gfx_set_target_ucode(ucode_f3dex2);
