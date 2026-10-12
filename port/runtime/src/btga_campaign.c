@@ -1,5 +1,12 @@
 #include "btga_campaign.h"
 
+enum { kMissionConfigSize = 0x70, kMissionCount = 19 };
+
+static uint32_t read_be_u32(const uint8_t *p) {
+    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
+           ((uint32_t)p[2] << 8) | p[3];
+}
+
 static const uint8_t kLocationWidths[24] = {
     0x10, 0x10, 0x10, 0x18, 0x0C, 0x0C, 0x10, 0x18,
     0x10, 0x14, 0x0C, 0x10, 0x10, 0x14, 0x14, 0x18,
@@ -49,4 +56,23 @@ bool btga_campaign_mission_text(const uint8_t *data, size_t size,
                    &text->objective) &&
            span_at(data, size, briefing_offset, kBriefingWidths[mission],
                    &text->briefing);
+}
+
+bool btga_campaign_mission_config(const uint8_t *data, size_t size,
+                                  uint8_t mission, BtgaMissionConfig *config) {
+    const uint8_t *record;
+    size_t index;
+    if (data == NULL || config == NULL || mission >= kMissionCount ||
+        size != (size_t)kMissionConfigSize * kMissionCount) return false;
+    record = data + (size_t)mission * kMissionConfigSize;
+    *config = (BtgaMissionConfig){0};
+    config->track = read_be_u32(record + 4);
+    config->mode = read_be_u32(record + 8);
+    config->ai_count = record[0x0C];
+    if (config->ai_count > BTGA_CAMPAIGN_SLOT_COUNT - 1) return false;
+    for (index = 0; index < BTGA_CAMPAIGN_SLOT_COUNT; index++) {
+        config->teams[index] = record[0x0D + index];
+        config->tank_kinds[index] = read_be_u32(record + 0x18 + index * 4);
+    }
+    return true;
 }

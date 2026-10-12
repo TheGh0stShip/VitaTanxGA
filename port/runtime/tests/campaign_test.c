@@ -15,5 +15,24 @@ int btga_campaign_tests(void) {
     assert(text.briefing.length == 20);
     assert(!btga_campaign_mission_text(data, sizeof(data) - 1, 0, &text));
     assert(!btga_campaign_mission_text(data, sizeof(data), 19, &text));
+    {
+        uint8_t configs[19 * 0x70] = {0};
+        BtgaMissionConfig config;
+        configs[7] = 0x1A;
+        configs[11] = 8;
+        configs[0x0C] = 3;
+        configs[0x0F] = 1;
+        configs[0x10] = 1;
+        configs[0x11] = 1;
+        configs[0x18 + 2 * 4 + 3] = 4;
+        configs[0x18 + 3 * 4 + 3] = 4;
+        configs[0x18 + 4 * 4 + 3] = 4;
+        assert(btga_campaign_mission_config(configs, sizeof(configs), 0, &config));
+        assert(config.track == 26 && config.mode == 8 && config.ai_count == 3);
+        assert(config.teams[0] == 0 && config.teams[2] == 1);
+        assert(config.tank_kinds[0] == 0 && config.tank_kinds[2] == 4);
+        assert(!btga_campaign_mission_config(configs, sizeof(configs) - 1, 0,
+                                             &config));
+    }
     return 0;
 }

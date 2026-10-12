@@ -26,18 +26,17 @@ int main(void) {
         btga_runtime_set_terrain(&runtime, vita_platform_terrain());
     }
     {
-        uint8_t column;
-        for (column = 1; column < 4; column++) {
-            if (vita_platform_spawn(0, column, &spawn))
-                btga_runtime_add_ally(&runtime, spawn.x, spawn.y, spawn.z,
-                                      spawn.yaw);
-        }
-        uint8_t team;
-        for (team = 1; team < 4; team++) {
-            for (column = 0; column < 5; column++) {
-                if (vita_platform_spawn(team, column, &spawn))
-                    btga_runtime_add_enemy(&runtime, spawn.x, spawn.y, spawn.z,
-                                           spawn.yaw);
+        static const uint8_t one_player_order[BTGA_CAMPAIGN_SLOT_COUNT] =
+            {0, 2, 3, 4, 1};
+        BtgaMissionConfig config;
+        uint8_t slot;
+        if (vita_platform_mission_config(&config)) {
+            for (slot = 1; slot <= config.ai_count; slot++) {
+                uint8_t source_slot = one_player_order[slot];
+                if (vita_platform_spawn(0, source_slot, &spawn))
+                    btga_runtime_add_enemy_kind(
+                        &runtime, spawn.x, spawn.y, spawn.z, spawn.yaw,
+                        (uint8_t)config.tank_kinds[source_slot]);
             }
         }
     }

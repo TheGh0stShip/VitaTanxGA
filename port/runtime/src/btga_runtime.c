@@ -302,6 +302,11 @@ bool btga_runtime_add_pickup(BtgaRuntime *runtime, float x, float y, float z,
 
 bool btga_runtime_add_enemy(BtgaRuntime *runtime, float x, float y, float z,
                             uint16_t yaw) {
+    return btga_runtime_add_enemy_kind(runtime, x, y, z, yaw, 0);
+}
+
+bool btga_runtime_add_enemy_kind(BtgaRuntime *runtime, float x, float y, float z,
+                                 uint16_t yaw, uint8_t tank_kind) {
     unsigned int index;
     if (runtime == NULL) return false;
     for (index = 0; index < BTGA_MAX_ENEMIES; index++) {
@@ -312,6 +317,7 @@ bool btga_runtime_add_enemy(BtgaRuntime *runtime, float x, float y, float z,
             .spawn_x = x, .spawn_y = y, .spawn_z = z,
             .spawn_yaw = (float)yaw * (6.28318530718f / 65536.0f),
             .health = 100, .fire_cooldown = 30,
+            .tank_kind = tank_kind,
             .configured = true, .active = true,
         };
         return true;

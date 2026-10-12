@@ -36,7 +36,9 @@ typedef struct LoadedFile {
 
 static LoadedFile s_intro_stream;
 static LoadedFile s_campaign_text_file;
+static LoadedFile s_campaign_config_file;
 static BtgaMissionText s_mission_text;
+static BtgaMissionConfig s_mission_config;
 static LoadedFile s_world_files[7];
 static LoadedFile s_common_files[7];
 static LoadedFile s_spawn_files[7];
@@ -50,6 +52,8 @@ static BtgaWorldComponents s_spawn_components;
 static BtgaTerrain s_terrain;
 static BtgaTankDefinition s_player_tank;
 static uint16_t s_player_model_indices[BTGA_TANK_MAX_RENDER_PARTS];
+static BtgaTankDefinition s_enemy_tank;
+static uint16_t s_enemy_model_indices[BTGA_TANK_MAX_RENDER_PARTS];
 enum { kMaximumPickups = 64 };
 static BtgaWorldPickup s_pickups[kMaximumPickups];
 static uint16_t s_pickup_model_indices[kMaximumPickups];
@@ -336,6 +340,8 @@ static bool load_first_world(void) {
         !load_file("app0:assets/world-pools/state.bin", &s_state_pool) ||
         !load_file("app0:assets/world-pools/texture.bin", &s_texture_pool) ||
         !load_file("app0:assets/gameplay/gameplay.bin", &s_gameplay_data) ||
+        !load_file("app0:assets/campaign/campaign_config.bin",
+                   &s_campaign_config_file) ||
         s_world_files[0].size != 4) goto cleanup;
     s_world_components = (BtgaWorldComponents){
         s_world_files[1].data, s_world_files[1].size,
@@ -374,13 +380,25 @@ static bool load_first_world(void) {
                                    s_geometry_pool.size, &bounds, &s_terrain) &&
                 build_texture_cache() &&
                 btga_tank_definition(s_gameplay_data.data, s_gameplay_data.size,
-                                     0, &s_player_tank);
+                                     0, &s_player_tank) &&
+                btga_campaign_mission_config(s_campaign_config_file.data,
+                                             s_campaign_config_file.size, 0,
+                                             &s_mission_config) &&
+                btga_tank_definition(s_gameplay_data.data, s_gameplay_data.size,
+                                     4, &s_enemy_tank);
         for (index = 0; valid && index < s_player_tank.part_count; index++) {
             valid = btga_common_model_index(&s_common_components,
                                             s_player_tank.parts[index].model_id,
                                             &s_player_model_indices[index]) &&
                     cache_model_textures(&s_common_components,
                                          s_player_model_indices[index], 0);
+        }
+        for (index = 0; valid && index < s_enemy_tank.part_count; index++) {
+            valid = btga_common_model_index(&s_common_components,
+                                            s_enemy_tank.parts[index].model_id,
+                                            &s_enemy_model_indices[index]) &&
+                    cache_model_textures(&s_common_components,
+                                         s_enemy_model_indices[index], 0);
         }
         valid = valid && btga_world_pickups(&s_spawn_components, s_pickups,
                                             kMaximumPickups, &s_pickup_count);
@@ -423,6 +441,8 @@ cleanup:
     s_texture_pool = (LoadedFile){0};
     free(s_gameplay_data.data);
     s_gameplay_data = (LoadedFile){0};
+    free(s_campaign_config_file.data);
+    s_campaign_config_file = (LoadedFile){0};
     return valid;
 }
 
@@ -548,14 +568,19 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
     }
     for (enemy_index = 0; enemy_index < BTGA_MAX_ENEMIES; enemy_index++) {
         const BtgaEnemy *enemy = &runtime->enemies[enemy_index];
+        const BtgaTankDefinition *tank;
+        const uint16_t *model_indices;
         if (!enemy->active) continue;
-        for (tank_part = 0; tank_part < s_player_tank.part_count; tank_part++) {
+        tank = enemy->tank_kind == 4 ? &s_enemy_tank : &s_player_tank;
+        model_indices = enemy->tank_kind == 4 ? s_enemy_model_indices :
+                                                s_player_model_indices;
+        for (tank_part = 0; tank_part < tank->part_count; tank_part++) {
             float part_turn = fmodf(enemy->yaw, 6.28318530718f);
             uint16_t part_yaw;
             if (part_turn < 0.0f) part_turn += 6.28318530718f;
             part_yaw = (uint16_t)(part_turn * (65536.0f / 6.28318530718f));
             if (!btga_model_visit(&s_common_components,
-                                  s_player_model_indices[tank_part], 0,
+                                  model_indices[tank_part], 0,
                                   enemy->x, enemy->y, enemy->z, part_yaw,
                                   s_geometry_pool.data, s_geometry_pool.size,
                                   1000, draw_world_triangle, &draw,
@@ -671,6 +696,12 @@ const BtgaTerrain *vita_platform_terrain(void) {
 
 bool vita_platform_spawn(uint8_t row, uint8_t column, BtgaWorldSpawn *spawn) {
     return s_world_ready && btga_world_find_spawn(&s_spawn_components, row, column, spawn);
+}
+
+bool vita_platform_mission_config(BtgaMissionConfig *config) {
+    if (!s_world_ready || config == NULL) return false;
+    *config = s_mission_config;
+    return true;
 }
 
 bool vita_platform_pickup(size_t index, BtgaWorldPickup *pickup) {
@@ -893,6 +924,8 @@ void vita_platform_shutdown(void) {
     s_intro_stream = (LoadedFile){0};
     free(s_campaign_text_file.data);
     s_campaign_text_file = (LoadedFile){0};
+    free(s_campaign_config_file.data);
+    s_campaign_config_file = (LoadedFile){0};
     free(s_gameplay_data.data);
     s_gameplay_data = (LoadedFile){0};
     vita2d_fini();

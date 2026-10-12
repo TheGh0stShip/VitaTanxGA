@@ -69,6 +69,7 @@ int main(int argc, char **argv) {
     BtgaWorldSummary common_summary;
     uint16_t tank_model_index;
     uint32_t tank_triangles;
+    BtgaTankDefinition enemy_tank;
     int result = 1;
 
     if (argc != 8) {
@@ -194,6 +195,24 @@ int main(int argc, char **argv) {
     }
     printf("common tank model validated: model %u, %u triangles\n",
            tank_model_index, tank_triangles);
+    if (!btga_tank_definition(gameplay.data, gameplay.size, 4, &enemy_tank)) {
+        fprintf(stderr, "enemy tank definition failed validation\n");
+        goto cleanup;
+    }
+    for (index = 0; index < enemy_tank.part_count; index++) {
+        if (!btga_common_model_index(&common_components,
+                                     enemy_tank.parts[index].model_id,
+                                     &tank_model_index) ||
+            !btga_model_visit(&common_components, tank_model_index, 0,
+                              12.5f, 3.0f, -7.25f, 0, geometry.data,
+                              geometry.size, 1000, NULL, NULL,
+                              &tank_triangles) || tank_triangles == 0) {
+            fprintf(stderr, "enemy tank part %u failed validation\n", index);
+            goto cleanup;
+        }
+    }
+    printf("enemy tank kind 4 validated: %u render parts\n",
+           enemy_tank.part_count);
     if (!btga_world_validate(&components, &summary) ||
         summary.group_count != 1 || summary.placement_count != 770 ||
         summary.model_count != 59 || summary.part_count != 59 ||

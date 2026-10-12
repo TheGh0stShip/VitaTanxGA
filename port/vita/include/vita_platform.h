@@ -6,6 +6,7 @@
 
 #include "btga_runtime.h"
 #include "btga_world.h"
+#include "btga_campaign.h"
 
 /*
  * This is the first narrow platform seam for the future portable runtime.
@@ -24,6 +25,7 @@ const BtgaWorldSummary *vita_platform_world_summary(void);
 bool vita_platform_world_bounds(BtgaWorldBounds *bounds);
 const BtgaTerrain *vita_platform_terrain(void);
 bool vita_platform_spawn(uint8_t row, uint8_t column, BtgaWorldSpawn *spawn);
+bool vita_platform_mission_config(BtgaMissionConfig *config);
 bool vita_platform_pickup(size_t index, BtgaWorldPickup *pickup);
 bool vita_platform_intro_script(const uint8_t **data, size_t *size);
 uint64_t vita_platform_now_us(void);

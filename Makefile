@@ -61,7 +61,8 @@ runtime-campaign-asset-test: vita-assets
 		port/runtime/tests/campaign_asset_test.c \
 		-o /tmp/vitatanxga-campaign-asset-test
 	/tmp/vitatanxga-campaign-asset-test \
-		$(VITA_ASSETS)/campaign/campaign_text.bin
+		$(VITA_ASSETS)/campaign/campaign_text.bin \
+		$(VITA_ASSETS)/campaign/campaign_config.bin
 
 vita-assets: verify-rom
 	$(PYTHON) tools/extract_world_pools.py $(VITA_ASSETS)/world-pools --rom $(ROM)

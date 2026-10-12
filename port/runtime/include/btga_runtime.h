@@ -75,6 +75,7 @@ typedef struct BtgaEnemy {
     float velocity;
     uint16_t health;
     uint16_t fire_cooldown;
+    uint8_t tank_kind;
     bool configured;
     bool allied;
     bool active;
@@ -135,6 +136,8 @@ void btga_runtime_set_player_spawn(BtgaRuntime *runtime, float x, float y,
                                    float z, uint16_t yaw);
 bool btga_runtime_add_enemy(BtgaRuntime *runtime, float x, float y, float z,
                             uint16_t yaw);
+bool btga_runtime_add_enemy_kind(BtgaRuntime *runtime, float x, float y, float z,
+                                 uint16_t yaw, uint8_t tank_kind);
 bool btga_runtime_add_ally(BtgaRuntime *runtime, float x, float y, float z,
                            uint16_t yaw);
 bool btga_runtime_add_pickup(BtgaRuntime *runtime, float x, float y, float z,
