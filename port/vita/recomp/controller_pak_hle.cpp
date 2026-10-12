@@ -32,6 +32,8 @@ constexpr int pfs_dir_table = 0x5c;
 constexpr int pfs_inode_start = 0x60;
 constexpr int pfs_banks = 0x64;
 constexpr int pfs_active_bank = 0x65;
+constexpr std::size_t pak_id_offset = btga::ControllerPak::block_size;
+constexpr std::size_t pak_label_offset = 7 * btga::ControllerPak::block_size;
 
 enum PfsError : std::int32_t {
     err_no_pak = 1,
@@ -136,10 +138,10 @@ extern "C" void osPfsInitPak_recomp(std::uint8_t* rdram, recomp_context* ctx) {
     MEM_W(pfs_queue, pfs) = static_cast<std::int32_t>(queue);
     MEM_W(pfs_channel, pfs) = port;
     for (int i = 0; i < 32; ++i) {
-        MEM_B(pfs_id + i, pfs) = static_cast<std::int8_t>(image[32 + i]);
-        MEM_B(pfs_label + i, pfs) = static_cast<std::int8_t>(image[i]);
+        MEM_B(pfs_id + i, pfs) = static_cast<std::int8_t>(image[pak_id_offset + i]);
+        MEM_B(pfs_label + i, pfs) = static_cast<std::int8_t>(image[pak_label_offset + i]);
     }
-    MEM_W(pfs_version, pfs) = image[59];
+    MEM_W(pfs_version, pfs) = image[pak_id_offset + 27];
     MEM_W(pfs_dir_size, pfs) = btga::ControllerPak::directory_entries;
     MEM_W(pfs_inode_table, pfs) = 8;
     MEM_W(pfs_minode_table, pfs) = 16;

@@ -200,10 +200,13 @@ bool Fast3DMemoryBridge::StageTextureImage(u32 requiredBytes, bool palette, u32 
     TextureStage* stage = nullptr;
     for (u32 i = 0; i < mTextureStageCount; ++i) {
         if (mTextureStages[i].address == sourceAddress &&
-            mTextureStages[i].size == requiredBytes &&
+            mTextureStages[i].size >= requiredBytes &&
             mTextureStages[i].rowBytes == rowBytes &&
             mTextureStages[i].swizzleGroup == swizzleGroup) {
             stage = &mTextureStages[i];
+            // Hash and refresh the complete allocation. A previous command may
+            // have staged a larger set of tiles from the same source image.
+            requiredBytes = stage->size;
             break;
         }
     }
@@ -716,20 +719,73 @@ void* Fast3DMemoryBridge::TranslateList(u32 address, GBIVersion& version, u32 de
             const u32 lrt = w1 & 0xFFF;
             if (lrs < uls || lrt < ult) return fail();
 
-            u32 byteShift = 0;
-            if (siz == G_IM_SIZ_16b) byteShift = 1;
-            else if (siz == G_IM_SIZ_32b) byteShift = 2;
+            const auto bytesForPixels = [siz](u64 pixels) -> u64 {
+                switch (siz) {
+                    case G_IM_SIZ_4b:  return (pixels + 1) >> 1;
+                    case G_IM_SIZ_8b:  return pixels;
+                    case G_IM_SIZ_16b: return pixels * 2;
+                    case G_IM_SIZ_32b: return pixels * 4;
+                    default: return 0;
+                }
+            };
+            const auto byteOffsetForPixel = [siz](u64 pixel) -> u64 {
+                return siz == G_IM_SIZ_4b ? pixel >> 1 :
+                       siz == G_IM_SIZ_8b ? pixel :
+                       siz == G_IM_SIZ_16b ? pixel * 2 : pixel * 4;
+            };
 
             const u32 offsetX = uls >> 2;
             const u32 offsetY = ult >> 2;
             const u32 tileWidth = ((lrs - uls) >> 2) + 1;
             const u32 tileHeight = ((lrt - ult) >> 2) + 1;
-            const u32 fullLineBytes = width << byteShift;
-            const u32 tileLineBytes = tileWidth << byteShift;
-            const u32 startOffset = fullLineBytes * offsetY + (offsetX << byteShift);
-            const u64 required = (u64)startOffset +
+            const u64 fullLineBytes64 = bytesForPixels(width);
+            const u64 tileLineBytes = bytesForPixels(tileWidth);
+            if (fullLineBytes64 == 0 || fullLineBytes64 > 0xFFFFFFFFu) return fail();
+            const u32 fullLineBytes = (u32)fullLineBytes64;
+            const u64 startOffset = fullLineBytes64 * offsetY + byteOffsetForPixel(offsetX);
+            const u64 required = startOffset +
                 (tileHeight > 0 ? (u64)(tileHeight - 1) * fullLineBytes + tileLineBytes : 0);
-            if (required == 0 || required > 0xFFFFFFFFu || !StageTextureImage((u32)required)) return fail();
+            if (required == 0 || required > 0xFFFFFFFFu) return fail();
+
+            // Large backgrounds are commonly loaded as dozens of horizontal
+            // strips. Stage the largest referenced prefix once so each strip
+            // can reuse the same allocation instead of repeatedly copying and
+            // hashing every progressively larger prefix.
+            u64 stagedRequired = required;
+            for (u32 lookahead = n + 1; lookahead < commandCount; ++lookahead) {
+                const u32 nextPc = address + lookahead * 8;
+                const u32 nextW0 = Read32(nextPc);
+                const u32 nextW1 = Read32(nextPc + 4);
+                const u8 nextOp = (u8)(nextW0 >> 24);
+                if (nextOp == G_RDP_SETTIMG) break;
+                if (nextOp != G_RDP_LOADTILE) continue;
+
+                const u32 nextUls = (nextW0 >> 12) & 0xFFF;
+                const u32 nextUlt = nextW0 & 0xFFF;
+                const u32 nextLrs = (nextW1 >> 12) & 0xFFF;
+                const u32 nextLrt = nextW1 & 0xFFF;
+                if (nextLrs < nextUls || nextLrt < nextUlt) return fail();
+                const u32 nextOffsetX = nextUls >> 2;
+                const u32 nextOffsetY = nextUlt >> 2;
+                const u32 nextWidth = ((nextLrs - nextUls) >> 2) + 1;
+                const u32 nextHeight = ((nextLrt - nextUlt) >> 2) + 1;
+                const u64 nextStart = (u64)fullLineBytes * nextOffsetY +
+                    byteOffsetForPixel(nextOffsetX);
+                const u64 nextRequired = nextStart +
+                    (u64)(nextHeight - 1) * fullLineBytes +
+                    bytesForPixels(nextWidth);
+                if (nextRequired > stagedRequired) stagedRequired = nextRequired;
+            }
+
+            // Fast3D decodes staged bytes in logical N64 order. Stage complete
+            // source rows so the TMEM odd-row word swap is also preserved for
+            // IA4 menu/font atlases.
+            const u64 stagedRows = (stagedRequired + fullLineBytes - 1) / fullLineBytes;
+            stagedRequired = stagedRows * fullLineBytes;
+            const u8 swizzleGroup = siz == G_IM_SIZ_32b ? 16 : 8;
+            if (stagedRequired > 0xFFFFFFFFu ||
+                !StageTextureImage((u32)stagedRequired, false, 0,
+                                   fullLineBytes, swizzleGroup)) return fail();
             emitTextureSetImg = true;
         }
 
