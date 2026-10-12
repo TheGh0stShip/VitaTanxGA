@@ -5417,25 +5417,6 @@ bool Interpreter::SyncColorImageToRdram(uint8_t* rdramBase, uint32_t rdramSize) 
         return false;
     }
 
-    if (mRdramReadbackFb < 0) {
-        mRdramReadbackFb = CreateFrameBuffer(width, height, width, height, 0, true);
-        mRdramReadbackWidth = width;
-        mRdramReadbackHeight = height;
-    } else if (mRdramReadbackWidth != width || mRdramReadbackHeight != height) {
-        mRapi->UpdateFramebufferParameters(mRdramReadbackFb, width, height, true, true, false, false);
-        auto fbIt = mFrameBuffers.find(mRdramReadbackFb);
-        if (fbIt != mFrameBuffers.end()) {
-            fbIt->second.orig_width = width;
-            fbIt->second.orig_height = height;
-            fbIt->second.applied_width = width;
-            fbIt->second.applied_height = height;
-            fbIt->second.native_width = width;
-            fbIt->second.native_height = height;
-        }
-        mRdramReadbackWidth = width;
-        mRdramReadbackHeight = height;
-    }
-
     const int srcFb = mRendersToFb ? mGameFb : 0;
     int srcX0 = 0;
     int srcY0 = 0;
@@ -5449,12 +5430,55 @@ bool Interpreter::SyncColorImageToRdram(uint8_t* rdramBase, uint32_t rdramSize) 
         srcY1 = mGameWindowViewport.y + static_cast<int>(mGameWindowViewport.height);
     }
 
-    mRapi->CopyFramebuffer(mRdramReadbackFb, srcFb,
-                           srcX0, srcY0, srcX1, srcY1,
-                           0, 0, width, height);
-
     mRdramReadbackBuffer.resize((size_t)pixelCount);
-    mRapi->ReadFramebufferToCPU(mRdramReadbackFb, width, height, mRdramReadbackBuffer.data());
+
+    // Vita normally renders the game into a native-resolution framebuffer,
+    // so read it directly when no scale or crop is required. Apart from
+    // avoiding a synchronous extra draw, this keeps vitaGL's private blit
+    // shader out of the middle of a Fast3D frame.
+    const bool directReadback =
+        srcFb == mGameFb && srcX0 == 0 && srcY0 == 0 &&
+        srcX1 == static_cast<int>(width) &&
+        srcY1 == static_cast<int>(height);
+    if (directReadback) {
+        mRapi->ReadFramebufferToCPU(srcFb, width, height,
+                                    mRdramReadbackBuffer.data());
+    } else {
+        if (mRdramReadbackFb < 0) {
+            mRdramReadbackFb = CreateFrameBuffer(width, height, width, height, 0, true);
+            mRdramReadbackWidth = width;
+            mRdramReadbackHeight = height;
+        } else if (mRdramReadbackWidth != width || mRdramReadbackHeight != height) {
+            mRapi->UpdateFramebufferParameters(mRdramReadbackFb, width, height,
+                                               true, true, false, false);
+            auto fbIt = mFrameBuffers.find(mRdramReadbackFb);
+            if (fbIt != mFrameBuffers.end()) {
+                fbIt->second.orig_width = width;
+                fbIt->second.orig_height = height;
+                fbIt->second.applied_width = width;
+                fbIt->second.applied_height = height;
+                fbIt->second.native_width = width;
+                fbIt->second.native_height = height;
+            }
+            mRdramReadbackWidth = width;
+            mRdramReadbackHeight = height;
+        }
+
+        // CopyFramebuffer is implemented by vitaGL as a draw using an
+        // internal GXM program. Explicitly discard Fast3D's cached program
+        // around it; otherwise the following game draw can continue with the
+        // blit shader while the interpreter believes its shader is bound.
+        mRapi->UnloadShader(mRenderingState.mShaderProgram);
+        mRenderingState.mShaderProgram = nullptr;
+        mRapi->CopyFramebuffer(mRdramReadbackFb, srcFb,
+                               srcX0, srcY0, srcX1, srcY1,
+                               0, 0, width, height);
+        mRapi->ReadFramebufferToCPU(mRdramReadbackFb, width, height,
+                                    mRdramReadbackBuffer.data());
+        mRapi->InvalidateExternalState();
+        mRdp->textures_changed[0] = true;
+        mRdp->textures_changed[1] = true;
+    }
 
     for (uint32_t y = 0; y < height; ++y) {
         const uint16_t* srcRow = mRdramReadbackBuffer.data() + (size_t)y * width;
