@@ -37,5 +37,7 @@ bool btga_world_validate(const BtgaWorldComponents *components,
 uint32_t btga_read_be_u32(const uint8_t bytes[4]);
 bool btga_world_bounds(const BtgaWorldComponents *components,
                        BtgaWorldBounds *bounds);
+bool btga_common_model_index(const BtgaWorldComponents *components,
+                             uint16_t model_id, uint16_t *model_index);
 
 #endif

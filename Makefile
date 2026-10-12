@@ -35,7 +35,8 @@ runtime-asset-test: vita-assets
 	/tmp/vitatanxga-world-asset-test $(VITA_ASSETS)/worlds/level_world_000 \
 		$(VITA_ASSETS)/world-pools/geometry.bin \
 		$(VITA_ASSETS)/world-pools/state.bin \
-		$(VITA_ASSETS)/world-pools/texture.bin
+		$(VITA_ASSETS)/world-pools/texture.bin \
+		$(VITA_ASSETS)/worlds/common_world
 
 vita-assets: verify-rom
 	$(PYTHON) tools/extract_world_pools.py $(VITA_ASSETS)/world-pools --rom $(ROM)

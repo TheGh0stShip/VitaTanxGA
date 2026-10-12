@@ -112,3 +112,21 @@ bool btga_world_bounds(const BtgaWorldComponents *components,
     }
     return true;
 }
+
+bool btga_common_model_index(const BtgaWorldComponents *components,
+                             uint16_t model_id, uint16_t *model_index) {
+    BtgaWorldSummary summary;
+    uint32_t offset;
+    uint16_t index;
+    if (model_index == NULL || model_id >= 263 ||
+        !btga_world_validate(components, &summary) || summary.placement_count != 1)
+        return false;
+    offset = btga_read_be_u32(components->placements + 8);
+    if (offset > components->definitions_size ||
+        components->definitions_size - offset < 2u + 263u * 2u ||
+        components->definitions[offset] != 33) return false;
+    index = read_be_u16(components->definitions + offset + 2u + model_id * 2u);
+    if (index == UINT16_MAX || index >= summary.model_count) return false;
+    *model_index = index;
+    return true;
+}

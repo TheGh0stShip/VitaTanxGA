@@ -43,7 +43,10 @@ placement/model/part/reference graph. It decodes the paired state and texture
 commands, uploads native Vita textures, and renders the placed scene with a
 37-degree perspective camera. Portable gameplay state currently covers tank
 movement, terrain following, turret aim, projectiles, ammunition, and
-title/gameplay/pause transitions.
+title/gameplay/pause transitions. The player body is resolved through the
+original common-world model-ID table and rendered from its retail geometry,
+materials, and textures; articulated turret/tread behavior remains to be
+connected.
 
 `make vita-check` tests the portable loaders against synthetic malformed
 inputs and all 1,287 geometry/state references plus all 1,285 textured

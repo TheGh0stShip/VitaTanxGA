@@ -45,6 +45,7 @@ static bool load_component(const char *directory, unsigned int index,
 
 int main(int argc, char **argv) {
     LoadedFile files[7] = {0};
+    LoadedFile common_files[7] = {0};
     LoadedFile geometry = {0};
     LoadedFile state = {0};
     LoadedFile texture = {0};
@@ -60,16 +61,24 @@ int main(int argc, char **argv) {
     BtgaSceneSummary scene_summary;
     BtgaWorldBounds world_bounds;
     BtgaTerrain terrain;
+    BtgaWorldComponents common_components;
+    BtgaWorldSummary common_summary;
+    uint16_t tank_model_index;
+    uint32_t tank_triangles;
     int result = 1;
 
-    if (argc != 5) {
-        fprintf(stderr, "usage: %s WORLD_DIRECTORY GEOMETRY_POOL STATE_POOL TEXTURE_POOL\n",
+    if (argc != 6) {
+        fprintf(stderr, "usage: %s WORLD_DIRECTORY GEOMETRY_POOL STATE_POOL TEXTURE_POOL COMMON_WORLD\n",
                 argv[0]);
         return 2;
     }
     for (index = 0; index < 7; index++) {
         if (!load_component(argv[1], index, &files[index])) {
             fprintf(stderr, "failed to load component%u.bin\n", index);
+            goto cleanup;
+        }
+        if (!load_component(argv[5], index, &common_files[index])) {
+            fprintf(stderr, "failed to load common component%u.bin\n", index);
             goto cleanup;
         }
     }
@@ -92,6 +101,29 @@ int main(int argc, char **argv) {
         files[5].data, files[5].size, files[6].data, files[6].size,
         btga_read_be_u32(files[0].data),
     };
+    if (common_files[0].size != 4) goto cleanup;
+    common_components = (BtgaWorldComponents){
+        common_files[1].data, common_files[1].size,
+        common_files[2].data, common_files[2].size,
+        common_files[3].data, common_files[3].size,
+        common_files[4].data, common_files[4].size,
+        common_files[5].data, common_files[5].size,
+        common_files[6].data, common_files[6].size,
+        btga_read_be_u32(common_files[0].data),
+    };
+    if (!btga_world_validate(&common_components, &common_summary) ||
+        common_summary.model_count != 244 ||
+        !btga_common_model_index(&common_components, 0, &tank_model_index) ||
+        tank_model_index != 19 ||
+        !btga_model_visit(&common_components, tank_model_index, 0,
+                          12.5f, 3.0f, -7.25f, 0, geometry.data, geometry.size,
+                          1000, NULL, NULL, &tank_triangles) ||
+        tank_triangles != 45) {
+        fprintf(stderr, "common tank model validation failed\n");
+        goto cleanup;
+    }
+    printf("common tank model validated: model %u, %u triangles\n",
+           tank_model_index, tank_triangles);
     if (!btga_world_validate(&components, &summary) ||
         summary.group_count != 2 || summary.placement_count != 1035 ||
         summary.model_count != 135 || summary.part_count != 135 ||
@@ -188,7 +220,10 @@ int main(int argc, char **argv) {
     }
     result = 0;
 cleanup:
-    for (index = 0; index < 7; index++) free(files[index].data);
+    for (index = 0; index < 7; index++) {
+        free(files[index].data);
+        free(common_files[index].data);
+    }
     free(geometry.data);
     free(state.data);
     free(texture.data);

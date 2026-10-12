@@ -6,9 +6,9 @@
 
 typedef struct BtgaPlacedTriangle {
     BtgaVertex vertices[3];
-    int16_t placement_x;
-    int16_t placement_y;
-    int16_t placement_z;
+    float placement_x;
+    float placement_y;
+    float placement_z;
     uint16_t placement_yaw;
     uint32_t state_offset;
     uint32_t state_size;
@@ -28,5 +28,11 @@ bool btga_scene_visit(const BtgaWorldComponents *world,
                       const uint8_t *geometry_pool, size_t geometry_pool_size,
                       uint32_t triangle_limit, BtgaPlacedTriangleVisitor visitor,
                       void *context, BtgaSceneSummary *summary);
+bool btga_model_visit(const BtgaWorldComponents *world, uint16_t model_index,
+                      uint8_t part_ordinal,
+                      float x, float y, float z, uint16_t yaw,
+                      const uint8_t *geometry_pool, size_t geometry_pool_size,
+                      uint32_t triangle_limit, BtgaPlacedTriangleVisitor visitor,
+                      void *context, uint32_t *visited_triangle_count);
 
 #endif

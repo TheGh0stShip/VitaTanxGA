@@ -17,6 +17,8 @@ The repository currently produces an installable PS Vita VPK that:
   N64 textures, material colors, placements, and yaw transforms;
 - provides title, gameplay, and pause states with controllable tank movement,
   turret aiming, firing, ammunition, projectiles, and a following camera;
+- resolves and renders the player's original tank asset through the recovered
+  shared model-ID table;
 - derives navigation heights from the placed retail level geometry;
 - loads and validates the first extracted world's big-endian component tables;
 - packages decoded worlds, shared world pools, images, scripts, and libmus
@@ -24,7 +26,7 @@ The repository currently produces an installable PS Vita VPK that:
 - validates the executable and code-bearing libraries for ABI consistency.
 
 This is an **early runtime port**, not yet the complete game. Enemy/object
-behavior, mission scripting, the original tank models and weapon rules, audio,
+behavior, mission scripting, full tank articulation and weapon rules, audio,
 the complete frontend, saving, and remaining platform services are still being
 ported from the recovered implementation.
 
