@@ -10,7 +10,8 @@ decompilation project.
 
 The primary VPK currently includes:
 
-- all 1,879 translated retail functions across 35 generated translation units;
+- the complete 1,879-entry retail catalogue: 1,733 translated C bodies across
+  35 generated units plus explicit HLE, patch, stub, and N64-only boundaries;
 - N64 scheduler, threads, message queues, timers, controller, PI, AI, VI, SP,
   DP, and audio-microcode services;
 - a live F3DEX 2.07/GBI2 display-list renderer backed by vitaGL;

@@ -70,6 +70,14 @@ extern "C" void btga_score_count_step(std::uint8_t* rdram,
         read_guest_float(rdram, 0x803A5948U) > 0.0F) ctx->r3 = 1;
 }
 
+extern "C" void btga_cutscene_far_plane(std::uint8_t*, recomp_context* ctx) {
+    constexpr std::int32_t near_plane = 16;
+    constexpr std::int32_t fallback_far_plane = 32767;
+    if (static_cast<std::int32_t>(ctx->r3) <= near_plane) {
+        ctx->r3 = fallback_far_plane;
+    }
+}
+
 extern "C" void func_80098B40(std::uint8_t* rdram, recomp_context*) {
     constexpr gpr pending = static_cast<gpr>(static_cast<std::int32_t>(0x80219230U));
     while (MEM_W(0, pending) != 0) yield_self_1ms(rdram);

@@ -2,8 +2,10 @@
 
 The production target is a static recompilation of the complete retail N64
 program. `port/recomp/prepare.sh` verifies the user's ROM, runs N64Recomp, and
-produces 35 local C translation units containing 1,879 functions. Those
-generated files are ignored and are never committed.
+produces 35 local C translation units containing 1,733 translated bodies. HLE,
+patch, stub, and N64-only boundaries cover the rest of the authoritative
+1,879-entry catalogue. Those generated files are ignored and are never
+committed.
 
 ## Target and ABI
 
@@ -35,7 +37,14 @@ IPL3 before entering the translated cartridge entrypoint.
 
 The original AI frequency is converted into Vita's fixed 48 kHz main-output
 rate. Buffered-frame reports are converted back to the guest rate so the
-retail audio scheduler retains its original timing model.
+retail audio scheduler retains its original timing model. A bounded queue drops
+new transition/cutscene audio above 200 ms rather than allowing later effects
+to play seconds late.
+
+Compatibility hooks carry fractional host-frame steps through retail integer
+countdowns and guard the intro/credits projection against an uninitialized far
+plane. Six exact known outer-screen scissor words are corrected in the private
+runtime ROM copy to cover 320x240; the verified ROM file is never modified.
 
 ## Graphics
 

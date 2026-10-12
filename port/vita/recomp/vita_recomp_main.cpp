@@ -33,6 +33,7 @@ constexpr std::size_t kRomSize = 8U * 1024U * 1024U;
 constexpr std::size_t kAudioFrames = 1024;
 constexpr std::size_t kAudioRingFrames = 16384;
 constexpr std::uint32_t kVitaAudioRate = 48000;
+constexpr std::size_t kAudioSoftCapFrames = kVitaAudioRate / 5;
 constexpr int kControllerCount = 4;
 constexpr std::uint8_t kExpectedSha1[20] = {
     0x80, 0x52, 0x48, 0xfb, 0x0a, 0x0e, 0xe6, 0x94, 0xca, 0xd8,
@@ -123,6 +124,32 @@ bool load_rom(std::vector<std::uint8_t>& bytes) {
                       std::equal(digest.begin(), digest.end(), kExpectedSha1);
     if (!good) bytes.clear();
     return good;
+}
+
+bool patch_screen_edge_scissors(std::vector<std::uint8_t>& rom) {
+    struct Fix { std::size_t offset; std::uint32_t original; std::uint32_t replacement; };
+    constexpr Fix fixes[] = {
+        {0xB7F74, 0x004FC3BCU, 0x005003C0U},
+        {0xB7F8C, 0x004FC1DCU, 0x005001DCU},
+        {0xB7FA4, 0x004FC3BCU, 0x005003C0U},
+        {0xB7FD4, 0x004FC1DCU, 0x005001DCU},
+        {0xB7FEC, 0x0027C3BCU, 0x0027C3C0U},
+        {0xB8004, 0x004FC3BCU, 0x005003C0U},
+    };
+    for (const Fix& fix : fixes) {
+        if (fix.offset + 4 > rom.size()) return false;
+        const std::uint32_t word =
+            (static_cast<std::uint32_t>(rom[fix.offset]) << 24U) |
+            (static_cast<std::uint32_t>(rom[fix.offset + 1]) << 16U) |
+            (static_cast<std::uint32_t>(rom[fix.offset + 2]) << 8U) |
+            rom[fix.offset + 3];
+        if (word != fix.original) return false;
+        rom[fix.offset] = static_cast<std::uint8_t>(fix.replacement >> 24U);
+        rom[fix.offset + 1] = static_cast<std::uint8_t>(fix.replacement >> 16U);
+        rom[fix.offset + 2] = static_cast<std::uint8_t>(fix.replacement >> 8U);
+        rom[fix.offset + 3] = static_cast<std::uint8_t>(fix.replacement);
+    }
+    return true;
 }
 
 void write_guest_word(std::uint8_t* rdram, std::uint32_t address,
@@ -244,6 +271,11 @@ void queue_audio(std::int16_t* samples, std::size_t sample_count) {
     const std::size_t frames = sample_count / 2;
     std::uint32_t write = audio_write.load(std::memory_order_relaxed);
     const std::uint32_t read = audio_read.load(std::memory_order_acquire);
+    const std::size_t queued =
+        write >= read ? write - read : kAudioRingFrames - read + write;
+    // Transitions and skipped cutscenes can submit faster than real time. Do
+    // not let stale effects accumulate behind more than 200 ms of Vita audio.
+    if (queued > kAudioSoftCapFrames) return;
     std::lock_guard lock{resampler_mutex};
     for (std::size_t frame = 0; frame < frames; ++frame) {
         resample_phase += kVitaAudioRate;
@@ -289,6 +321,10 @@ int main() {
     std::vector<std::uint8_t> rom;
     if (!load_rom(rom)) {
         log_message("baserom.z64 is missing or is not the supported USA Rev 0 ROM");
+        return 2;
+    }
+    if (!patch_screen_edge_scissors(rom)) {
+        log_message("verified ROM did not contain the expected viewport display lists");
         return 2;
     }
     auto rdram = std::unique_ptr<std::uint8_t, decltype(&std::free)>(

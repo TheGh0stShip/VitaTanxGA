@@ -28,4 +28,16 @@ count="$(find generated/functions -name 'funcs_*.c' -type f | wc -l)"
     echo "Expected 35 translated game units, generated $count" >&2
     exit 1
 }
-echo "Generated the complete 1,879-function game in 35 units and audio microcode locally"
+catalog_count="$(python3 - "$root/config/vita/recomp_function_boundaries.toml" <<'PY'
+import sys, tomllib
+with open(sys.argv[1], "rb") as stream:
+    catalogue = tomllib.load(stream)
+print(sum(len(section.get("functions", ())) for section in catalogue["section"]))
+PY
+)"
+translated_count="$(grep -h '^RECOMP_FUNC void ' generated/functions/funcs_*.c | wc -l)"
+[[ "$catalog_count" -eq 1879 && "$translated_count" -eq 1733 ]] || {
+    echo "Expected 1,879 catalogue entries and 1,733 translated bodies; got $catalog_count and $translated_count" >&2
+    exit 1
+}
+echo "Covered all 1,879 catalogue entries: 1,733 translated bodies in 35 units plus HLE/patch boundaries"
