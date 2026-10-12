@@ -503,6 +503,7 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
     size_t num_floats = 0;
     const std::string vs_buf = BuildVsShaderInline(cc_features, num_floats);
     const std::string fs_buf = BuildFsShaderInline(cc_features, mCurrentFilterMode, mSrgbMode);
+    const size_t expected_num_floats = num_floats;
 
     const GLchar* sources[2] = { vs_buf.data(), fs_buf.data() };
     const GLint  lengths[2]  = { (GLint)vs_buf.size(), (GLint)fs_buf.size() };
@@ -522,8 +523,10 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
         constexpr int max_shader_cache_size = 4 * 1024 * 1024;
         if (file_size > (int)sizeof(size_t) && file_size <= max_shader_cache_size) {
             const size_t binary_size = (size_t)file_size - sizeof(size_t);
+            size_t cached_num_floats = 0;
             prog_bin = malloc(binary_size);
-            if (prog_bin && fread(&num_floats, 1, sizeof(size_t), f) == sizeof(size_t) &&
+            if (prog_bin && fread(&cached_num_floats, 1, sizeof(size_t), f) == sizeof(size_t) &&
+                cached_num_floats == expected_num_floats &&
                 fread(prog_bin, 1, binary_size, f) == binary_size &&
                 ValidVitaProgramBinary(prog_bin, binary_size)) {
                 shader_program = glCreateProgram();
