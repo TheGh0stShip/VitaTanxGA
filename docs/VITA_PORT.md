@@ -31,8 +31,8 @@ make vita-check
 The package is written to `port/vita/build/vitatanxga.vpk`. `make vita`
 first verifies the supplied ROM and stages decoded LZARI worlds and images,
 the shared texture/state/geometry pools, scripts, libmus data, and original
-fixed-width campaign text table into the ignored `assets/extracted/us/vita`
-tree.
+fixed-width campaign text and 19-record mission-configuration tables into the
+ignored `assets/extracted/us/vita` tree.
 Those generated files are packaged under `app0:assets/`; the ROM itself is
 never packaged or committed. The executable runs a bounded 30 Hz fixed-step
 simulation, maps Vita controls to portable button/analog state, and lets the
@@ -41,15 +41,20 @@ also reads the first world's split component files, decodes their big-endian
 fields explicitly, validates table and pool ranges, interprets the referenced
 F3DEX2 vertex/triangle command streams, and traverses the recovered
 placement/model/part/reference graph. It decodes the paired state and texture
-commands, uploads native Vita textures, and renders the placed scene with a
-37-degree perspective camera and GXM depth testing. Portable gameplay state
-currently covers tank movement, terrain following, turret aim, projectiles,
-ammunition, the recovered three-allied/fifteen-opposing first-mission formation,
-team-aware pursuit and firing, damage, enemy-only victory evaluation,
+commands, including N64 tile origins, coordinate shifts, and sampling modes;
+uploads native Vita textures; applies recovered material and distance
+modulation; and separates alpha surfaces from opaque depth writes. The full
+6,303-triangle placed scene is rendered with a 37-degree perspective camera
+and GXM depth testing. Portable gameplay state currently covers tank movement,
+terrain following, turret aim, projectiles, ammunition, the recovered
+three-hostile first-mission roster, pursuit and firing, damage, enemy-only
+victory evaluation,
 repeatable mission resets, and title/gameplay/pause
 transitions. Tank body, turret, tread, and color-detail layers are resolved
 through the original common-world model-ID table and rendered from retail
-geometry, materials, and textures. The companion world is also decoded for
+geometry, materials, and textures. The hostiles use the distinct recovered
+six-part tank-kind-4 definition instead of the player's M1A1. The companion
+world is also decoded for
 entry type 7 placements; all 41 first-mission pickups resolve through the
 retail 20-entry gameplay model table, load their common-world textures, and
 render with the original rotation behavior. Their recovered mode handler now
@@ -64,6 +69,9 @@ single-player branch of the retail asset dispatcher maps that ID to
 `level_world_127` for SF Airport geometry and `level_world_131` for actors,
 spawns, and pickups. The port follows that mapping; the earlier `000`/`001`
 pair belongs to a different mode and is not used as campaign mission zero.
+That mission record declares three AI vehicles. Retail one-player order
+`0,2,3,4,1` selects spawn slot 0 for the player and slots 2, 3, and 4 for the
+three team-1 hostile tanks; unused placement markers are not instantiated.
 
 The frontend executes the recovered opening narrative and then displays the
 retail mission-zero location, objective, and complete briefing through the
@@ -84,8 +92,8 @@ mission streams remains to be connected to their runtime consumers.
 `make vita-check` tests the portable loaders against synthetic malformed
 inputs and all 277 geometry/state references plus all 275 textured references
 in the extracted SF Airport data. The placed scene gate covers 710 renderable
-placements and 6,303 triangles,
-The gate additionally validates all 23,483 commands in the extracted first
+placements and 6,303 triangles. The gate additionally validates mission zero's
+level 26, mode 8, and three tank-kind-4 AI entries, plus all 23,483 commands in the extracted first
 campaign script and executes the opening stream to its terminator while
 requiring all seven retail text events. It also checks the extracted campaign
 table against the full first briefing, then validates that the port ELF is

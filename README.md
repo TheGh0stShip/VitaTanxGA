@@ -14,24 +14,28 @@ The repository currently produces an installable PS Vita VPK that:
 - runs platform-neutral game state at a fixed 30 Hz simulation rate;
 - maps Vita buttons and both analog sticks into a portable input structure;
 - renders perspective world geometry with the original vertex UVs, decoded
-  N64 textures, recovered wrap/mirror/clamp sampling, material colors,
-  placements, depth testing, and yaw transforms;
+  N64 textures, recovered tile origins and coordinate shifts,
+  wrap/mirror/clamp sampling, material colors, separate opaque/alpha depth
+  handling, placements, depth testing, and yaw transforms;
 - provides title, gameplay, and pause states with controllable tank movement,
   turret aiming, firing, ammunition, projectiles, and a following camera;
 - resolves and renders the player's original tank asset through the recovered
   shared model-ID table, including body, turret, treads, and detail layers;
 - loads the campaign dispatcher-selected SF Airport world/actor pair rather
   than the unrelated multiplayer pair previously used;
-- creates the recovered three-tank allied escort and full fifteen-tank
-  opposing formation, with team-aware steering, pursuit, firing, projectile ownership,
-  hit detection, damage, and enemy-only mission completion;
+- parses the retail campaign setup record and applies its one-player slot
+  reorder, creating SF Airport's three configured hostile tank-kind-4 actors
+  at spawn slots 2, 3, and 4 instead of activating every placement marker;
+- renders those enemies with their own recovered six-part vehicle definition,
+  with steering, pursuit, firing, projectile ownership, hit detection, damage,
+  and enemy-only mission completion;
 - resolves and renders all 41 first-mission pickup placements through the
   recovered pickup-kind/model table and original textured common-world models,
   with retail health, ammunition, weapon inventory, tank-buck, and radar effects;
 - derives navigation heights from the placed retail level geometry;
 - loads and validates the first extracted world's big-endian component tables;
 - packages decoded worlds, shared world pools, images, scripts, libmus audio
-  resources, and the original campaign text table;
+  resources, and the original campaign text and mission-configuration tables;
 - presents the recovered San Francisco Airport location, objective, and full
   mission briefing between the opening narrative and deployment;
 - parses the first retail campaign script's 41 streams and 23,483

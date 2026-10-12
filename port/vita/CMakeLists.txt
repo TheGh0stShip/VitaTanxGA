@@ -67,16 +67,42 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 vita_create_self(${PROJECT_NAME}.self ${PROJECT_NAME})
 
 # Game data is extracted from the user's verified ROM by `make vita-assets`.
-# It is deliberately ignored by Git, but each staged file is installed into
-# the VPK so app0: is the only runtime asset source.
+# It is deliberately ignored by Git. Package only assets opened by this
+# executable; decoded previews, unused worlds, inventories, and future audio
+# banks do not belong in the installable title.
 set(VITA_ASSET_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../assets/extracted/us/vita")
-file(GLOB_RECURSE VITA_GAME_FILES CONFIGURE_DEPENDS "${VITA_ASSET_ROOT}/*")
+set(VITA_GAME_FILES
+  "${VITA_ASSET_ROOT}/world-pools/geometry.bin"
+  "${VITA_ASSET_ROOT}/world-pools/state.bin"
+  "${VITA_ASSET_ROOT}/world-pools/texture.bin"
+  "${VITA_ASSET_ROOT}/gameplay/gameplay.bin"
+  "${VITA_ASSET_ROOT}/campaign/campaign_text.bin"
+  "${VITA_ASSET_ROOT}/campaign/campaign_config.bin"
+  "${VITA_ASSET_ROOT}/scripts/script_00_514720/header.bin"
+)
+file(GLOB VITA_COMMON_WORLD_FILES CONFIGURE_DEPENDS
+  "${VITA_ASSET_ROOT}/worlds/common_world/component*.bin")
+file(GLOB VITA_LEVEL_WORLD_FILES CONFIGURE_DEPENDS
+  "${VITA_ASSET_ROOT}/worlds/level_world_127/component*.bin")
+file(GLOB VITA_SPAWN_WORLD_FILES CONFIGURE_DEPENDS
+  "${VITA_ASSET_ROOT}/worlds/level_world_131/component*.bin")
+file(GLOB VITA_MISSION_STREAM_FILES CONFIGURE_DEPENDS
+  "${VITA_ASSET_ROOT}/scripts/script_00_514720/stream_*.bin")
+list(APPEND VITA_GAME_FILES
+  ${VITA_COMMON_WORLD_FILES}
+  ${VITA_LEVEL_WORLD_FILES}
+  ${VITA_SPAWN_WORLD_FILES}
+  ${VITA_MISSION_STREAM_FILES}
+)
+foreach(asset IN LISTS VITA_GAME_FILES)
+  if(NOT EXISTS "${asset}")
+    message(FATAL_ERROR "Required extracted Vita asset is missing: ${asset}")
+  endif()
+endforeach()
 set(VITA_GAME_FILE_ARGS)
 foreach(asset IN LISTS VITA_GAME_FILES)
-  if(NOT IS_DIRECTORY "${asset}")
-    file(RELATIVE_PATH destination "${VITA_ASSET_ROOT}" "${asset}")
-    list(APPEND VITA_GAME_FILE_ARGS FILE "${asset}" "assets/${destination}")
-  endif()
+  file(RELATIVE_PATH destination "${VITA_ASSET_ROOT}" "${asset}")
+  list(APPEND VITA_GAME_FILE_ARGS FILE "${asset}" "assets/${destination}")
 endforeach()
 
 vita_create_vpk(${PROJECT_NAME}.vpk ${VITA_TITLEID} ${PROJECT_NAME}.self
