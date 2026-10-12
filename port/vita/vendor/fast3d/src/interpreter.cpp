@@ -2567,23 +2567,14 @@ void Interpreter::GfxDpLoadBlock(uint8_t tile, uint32_t uls, uint32_t ult, uint3
     SUPPORT_CHECK(ult == 0);
 
     // The lrs field rather seems to be number of pixels to load
-    uint32_t word_size_shift = 0;
+    const uint32_t pixel_count = lrs + 1;
+    uint32_t orig_size_bytes = 0;
     switch (mRdp->texture_to_load.siz) {
-        case G_IM_SIZ_4b:
-            word_size_shift = -1;
-            break;
-        case G_IM_SIZ_8b:
-            word_size_shift = 0;
-            break;
-        case G_IM_SIZ_16b:
-            word_size_shift = 1;
-            break;
-        case G_IM_SIZ_32b:
-            word_size_shift = 2;
-            break;
+        case G_IM_SIZ_4b:  orig_size_bytes = (pixel_count + 1) >> 1; break;
+        case G_IM_SIZ_8b:  orig_size_bytes = pixel_count; break;
+        case G_IM_SIZ_16b: orig_size_bytes = pixel_count << 1; break;
+        case G_IM_SIZ_32b: orig_size_bytes = pixel_count << 2; break;
     }
-    uint32_t orig_size_bytes =
-        word_size_shift > 0 ? (lrs + 1) << word_size_shift : (lrs + 1) >> (-(int64_t)word_size_shift);
     uint32_t size_bytes = orig_size_bytes;
     if (mRdp->texture_to_load.raw_tex_metadata.h_byte_scale != 1 ||
         mRdp->texture_to_load.raw_tex_metadata.v_pixel_scale != 1) {
@@ -2667,31 +2658,37 @@ void Interpreter::GfxDpLoadBlock(uint8_t tile, uint32_t uls, uint32_t ult, uint3
 void Interpreter::GfxDpLoadTile(uint8_t tile, uint32_t uls, uint32_t ult, uint32_t lrs, uint32_t lrt) {
     SUPPORT_CHECK(tile == G_TX_LOADTILE);
 
-    uint32_t word_size_shift = 0;
-    switch (mRdp->texture_to_load.siz) {
-        case G_IM_SIZ_4b:
-            word_size_shift = 0;
-            break;
-        case G_IM_SIZ_8b:
-            word_size_shift = 0;
-            break;
-        case G_IM_SIZ_16b:
-            word_size_shift = 1;
-            break;
-        case G_IM_SIZ_32b:
-            word_size_shift = 2;
-            break;
-    }
-
     uint32_t offset_x = uls >> G_TEXTURE_IMAGE_FRAC;
     uint32_t offset_y = ult >> G_TEXTURE_IMAGE_FRAC;
     uint32_t tile_width = ((lrs - uls) >> G_TEXTURE_IMAGE_FRAC) + 1;
     uint32_t tile_height = ((lrt - ult) >> G_TEXTURE_IMAGE_FRAC) + 1;
     uint32_t full_image_width = mRdp->texture_to_load.width;
 
-    uint32_t offset_x_in_bytes = offset_x << word_size_shift;
-    uint32_t tile_line_size_bytes = tile_width << word_size_shift;
-    uint32_t full_image_line_size_bytes = full_image_width << word_size_shift;
+    uint32_t offset_x_in_bytes = 0;
+    uint32_t tile_line_size_bytes = 0;
+    uint32_t full_image_line_size_bytes = 0;
+    switch (mRdp->texture_to_load.siz) {
+        case G_IM_SIZ_4b:
+            offset_x_in_bytes = offset_x >> 1;
+            tile_line_size_bytes = (tile_width + 1) >> 1;
+            full_image_line_size_bytes = (full_image_width + 1) >> 1;
+            break;
+        case G_IM_SIZ_8b:
+            offset_x_in_bytes = offset_x;
+            tile_line_size_bytes = tile_width;
+            full_image_line_size_bytes = full_image_width;
+            break;
+        case G_IM_SIZ_16b:
+            offset_x_in_bytes = offset_x << 1;
+            tile_line_size_bytes = tile_width << 1;
+            full_image_line_size_bytes = full_image_width << 1;
+            break;
+        case G_IM_SIZ_32b:
+            offset_x_in_bytes = offset_x << 2;
+            tile_line_size_bytes = tile_width << 2;
+            full_image_line_size_bytes = full_image_width << 2;
+            break;
+    }
 
     uint32_t orig_size_bytes = tile_line_size_bytes * tile_height;
     uint32_t size_bytes = orig_size_bytes;
