@@ -66,9 +66,12 @@ typedef struct BtgaProjectile {
 typedef struct BtgaEnemy {
     float x, y, z;
     float yaw;
+    float spawn_x, spawn_y, spawn_z;
+    float spawn_yaw;
     float velocity;
     uint16_t health;
     uint16_t fire_cooldown;
+    bool configured;
     bool active;
 } BtgaEnemy;
 
@@ -87,6 +90,10 @@ typedef struct BtgaRuntime {
     float world_min_z;
     float world_max_x;
     float world_max_z;
+    float player_spawn_x;
+    float player_spawn_y;
+    float player_spawn_z;
+    float player_spawn_yaw;
     BtgaRuntimeScreen screen;
     BtgaScriptCursor intro;
     bool intro_ready;
@@ -112,5 +119,6 @@ bool btga_runtime_set_intro_script(BtgaRuntime *runtime, const uint8_t *data,
 void btga_runtime_update(BtgaRuntime *runtime, const BtgaInput *input,
                          uint32_t elapsed_us);
 uint32_t btga_runtime_active_enemies(const BtgaRuntime *runtime);
+void btga_runtime_restart_mission(BtgaRuntime *runtime);
 
 #endif

@@ -19,6 +19,8 @@ int main(void) {
     assert(runtime.screen == BTGA_SCREEN_TITLE);
     assert(btga_runtime_add_enemy(&runtime, 100.0f, 0.0f, 200.0f, 0));
     assert(runtime.enemies[0].active && runtime.enemies[0].health == 100);
+    runtime.enemies[0].x = 50.0f;
+    runtime.enemies[0].health = 25;
 
     btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US * 2);
     assert(runtime.simulation_ticks == 2);
@@ -30,6 +32,7 @@ int main(void) {
     input.pressed = BTGA_BUTTON_CONFIRM;
     btga_runtime_update(&runtime, &input, 0);
     assert(runtime.screen == BTGA_SCREEN_INTRO);
+    assert(runtime.enemies[0].x == 100.0f && runtime.enemies[0].health == 100);
     input.pressed = BTGA_BUTTON_CANCEL;
     btga_runtime_update(&runtime, &input, 0);
     assert(runtime.screen == BTGA_SCREEN_GAMEPLAY);

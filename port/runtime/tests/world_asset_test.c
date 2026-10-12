@@ -46,6 +46,7 @@ static bool load_component(const char *directory, unsigned int index,
 int main(int argc, char **argv) {
     LoadedFile files[7] = {0};
     LoadedFile common_files[7] = {0};
+    LoadedFile spawn_files[7] = {0};
     LoadedFile geometry = {0};
     LoadedFile state = {0};
     LoadedFile texture = {0};
@@ -62,13 +63,14 @@ int main(int argc, char **argv) {
     BtgaWorldBounds world_bounds;
     BtgaTerrain terrain;
     BtgaWorldComponents common_components;
+    BtgaWorldComponents spawn_components;
     BtgaWorldSummary common_summary;
     uint16_t tank_model_index;
     uint32_t tank_triangles;
     int result = 1;
 
-    if (argc != 6) {
-        fprintf(stderr, "usage: %s WORLD_DIRECTORY GEOMETRY_POOL STATE_POOL TEXTURE_POOL COMMON_WORLD\n",
+    if (argc != 7) {
+        fprintf(stderr, "usage: %s WORLD_DIRECTORY GEOMETRY_POOL STATE_POOL TEXTURE_POOL COMMON_WORLD SPAWN_WORLD\n",
                 argv[0]);
         return 2;
     }
@@ -79,6 +81,10 @@ int main(int argc, char **argv) {
         }
         if (!load_component(argv[5], index, &common_files[index])) {
             fprintf(stderr, "failed to load common component%u.bin\n", index);
+            goto cleanup;
+        }
+        if (!load_component(argv[6], index, &spawn_files[index])) {
+            fprintf(stderr, "failed to load spawn component%u.bin\n", index);
             goto cleanup;
         }
     }
@@ -111,6 +117,31 @@ int main(int argc, char **argv) {
         common_files[6].data, common_files[6].size,
         btga_read_be_u32(common_files[0].data),
     };
+    if (spawn_files[0].size != 4) goto cleanup;
+    spawn_components = (BtgaWorldComponents){
+        spawn_files[1].data, spawn_files[1].size,
+        spawn_files[2].data, spawn_files[2].size,
+        spawn_files[3].data, spawn_files[3].size,
+        spawn_files[4].data, spawn_files[4].size,
+        spawn_files[5].data, spawn_files[5].size,
+        spawn_files[6].data, spawn_files[6].size,
+        btga_read_be_u32(spawn_files[0].data),
+    };
+    {
+        BtgaWorldSummary spawn_summary;
+        BtgaWorldSpawn spawn;
+        uint8_t team, column;
+        if (!btga_world_validate(&spawn_components, &spawn_summary)) goto cleanup;
+        for (team = 0; team < 2; team++) {
+            for (column = 0; column < 5; column++) {
+                if (!btga_world_find_spawn(&spawn_components, team, column, &spawn)) {
+                    fprintf(stderr, "missing team %u column %u spawn\n", team, column);
+                    goto cleanup;
+                }
+            }
+        }
+        printf("spawn formation validated: 5 player and 5 opposing slots\n");
+    }
     if (!btga_world_validate(&common_components, &common_summary) ||
         common_summary.model_count != 244 ||
         !btga_common_model_index(&common_components, 0, &tank_model_index) ||
@@ -223,6 +254,7 @@ cleanup:
     for (index = 0; index < 7; index++) {
         free(files[index].data);
         free(common_files[index].data);
+        free(spawn_files[index].data);
     }
     free(geometry.data);
     free(state.data);

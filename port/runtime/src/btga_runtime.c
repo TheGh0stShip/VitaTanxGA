@@ -167,12 +167,48 @@ bool btga_runtime_add_enemy(BtgaRuntime *runtime, float x, float y, float z,
     for (index = 0; index < BTGA_MAX_ENEMIES; index++) {
         if (runtime->enemies[index].active) continue;
         runtime->enemies[index] = (BtgaEnemy){
-            x, y, z, (float)yaw * (6.28318530718f / 65536.0f),
-            0.0f, 100, 30, true
+            .x = x, .y = y, .z = z,
+            .yaw = (float)yaw * (6.28318530718f / 65536.0f),
+            .spawn_x = x, .spawn_y = y, .spawn_z = z,
+            .spawn_yaw = (float)yaw * (6.28318530718f / 65536.0f),
+            .health = 100, .fire_cooldown = 30,
+            .configured = true, .active = true,
         };
         return true;
     }
     return false;
+}
+
+void btga_runtime_restart_mission(BtgaRuntime *runtime) {
+    unsigned int index;
+    if (runtime == NULL) return;
+    runtime->player.x = runtime->player_spawn_x;
+    runtime->player.y = runtime->player_spawn_y;
+    runtime->player.z = runtime->player_spawn_z;
+    runtime->player.yaw = runtime->player_spawn_yaw;
+    runtime->player.turret_yaw = 0.0f;
+    runtime->player.velocity = 0.0f;
+    runtime->player.health = 100;
+    runtime->player.ammo = 200;
+    runtime->player.fire_cooldown = 0;
+    for (index = 0; index < BTGA_MAX_PROJECTILES; index++)
+        runtime->projectiles[index].active = false;
+    for (index = 0; index < BTGA_MAX_ENEMIES; index++) {
+        BtgaEnemy *enemy = &runtime->enemies[index];
+        if (!enemy->configured) continue;
+        enemy->x = enemy->spawn_x;
+        enemy->y = enemy->spawn_y;
+        enemy->z = enemy->spawn_z;
+        enemy->yaw = enemy->spawn_yaw;
+        enemy->velocity = 0.0f;
+        enemy->health = 100;
+        enemy->fire_cooldown = 30;
+        enemy->active = true;
+    }
+    btga_runtime_set_player_spawn(runtime, runtime->player.x, runtime->player.y,
+                                  runtime->player.z,
+                                  (uint16_t)(runtime->player.yaw *
+                                             (65536.0f / 6.28318530718f)));
 }
 
 bool btga_runtime_set_intro_script(BtgaRuntime *runtime, const uint8_t *data,
@@ -208,6 +244,10 @@ void btga_runtime_set_player_spawn(BtgaRuntime *runtime, float x, float y,
     runtime->camera.z = z - cosf(heading) * 330.0f;
     runtime->camera.yaw = heading;
     runtime->camera.pitch = -0.42f;
+    runtime->player_spawn_x = x;
+    runtime->player_spawn_y = y;
+    runtime->player_spawn_z = z;
+    runtime->player_spawn_yaw = heading;
 }
 
 void btga_runtime_init(BtgaRuntime *runtime, bool assets_ready) {
@@ -222,6 +262,10 @@ void btga_runtime_init(BtgaRuntime *runtime, bool assets_ready) {
         .world_min_z = -9000.0f,
         .world_max_x = 9000.0f,
         .world_max_z = 9000.0f,
+        .player_spawn_x = 0.0f,
+        .player_spawn_y = 0.0f,
+        .player_spawn_z = 576.0f,
+        .player_spawn_yaw = 0.0f,
         .assets_ready = assets_ready,
         .running = true,
     };
@@ -253,6 +297,7 @@ void btga_runtime_update(BtgaRuntime *runtime, const BtgaInput *input,
     }
     if (runtime->screen == BTGA_SCREEN_TITLE &&
         (input->pressed & BTGA_BUTTON_CONFIRM) != 0 && runtime->assets_ready) {
+        btga_runtime_restart_mission(runtime);
         if (runtime->intro_ready) {
             const uint8_t *data = runtime->intro.data;
             size_t size = runtime->intro.size;

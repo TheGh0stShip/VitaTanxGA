@@ -40,7 +40,8 @@ runtime-asset-test: vita-assets
 		$(VITA_ASSETS)/world-pools/geometry.bin \
 		$(VITA_ASSETS)/world-pools/state.bin \
 		$(VITA_ASSETS)/world-pools/texture.bin \
-		$(VITA_ASSETS)/worlds/common_world
+		$(VITA_ASSETS)/worlds/common_world \
+		$(VITA_ASSETS)/worlds/level_world_001
 
 runtime-script-asset-test: vita-assets
 	$(CC) -std=c11 -Wall -Wextra -Werror -Wpedantic \

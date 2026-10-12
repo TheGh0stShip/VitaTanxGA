@@ -43,7 +43,8 @@ placement/model/part/reference graph. It decodes the paired state and texture
 commands, uploads native Vita textures, and renders the placed scene with a
 37-degree perspective camera and GXM depth testing. Portable gameplay state
 currently covers tank movement, terrain following, turret aim, projectiles,
-ammunition, enemy pursuit and firing, damage, and title/gameplay/pause
+ammunition, the full recovered five-tank opposing formation, enemy pursuit and
+firing, damage, repeatable mission resets, and title/gameplay/pause
 transitions. Tank body, turret, tread, and color-detail layers are resolved
 through the original common-world model-ID table and rendered from retail
 geometry, materials, and textures.

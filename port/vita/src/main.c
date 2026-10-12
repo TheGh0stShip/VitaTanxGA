@@ -25,8 +25,14 @@ int main(void) {
         btga_runtime_set_player_spawn(&runtime, spawn.x, spawn.y, spawn.z, spawn.yaw);
         btga_runtime_set_terrain(&runtime, vita_platform_terrain());
     }
-    if (vita_platform_spawn(1, 0, &spawn))
-        btga_runtime_add_enemy(&runtime, spawn.x, spawn.y, spawn.z, spawn.yaw);
+    {
+        uint8_t column;
+        for (column = 0; column < 5; column++) {
+            if (vita_platform_spawn(1, column, &spawn))
+                btga_runtime_add_enemy(&runtime, spawn.x, spawn.y, spawn.z,
+                                       spawn.yaw);
+        }
+    }
     previous_time = vita_platform_now_us();
 
     while (runtime.running) {
