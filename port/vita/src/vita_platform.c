@@ -602,8 +602,11 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
                               &tank_triangles)) return 0;
     }
     draw.actor = false;
+    if (draw.count >= kMaximumProjectedTriangles) return draw.count;
     if (!btga_scene_visit(&s_world_components, s_geometry_pool.data,
-                          s_geometry_pool.size, 5000, draw_world_triangle,
+                          s_geometry_pool.size,
+                          kMaximumProjectedTriangles - draw.count,
+                          draw_world_triangle,
                           &draw, &scene)) return 0;
     qsort(s_projected_triangles, draw.count, sizeof(s_projected_triangles[0]),
           compare_triangle_depth);
