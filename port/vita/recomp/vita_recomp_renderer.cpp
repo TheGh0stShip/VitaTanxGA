@@ -8,6 +8,7 @@
 #include "ultramodern/renderer_context.hpp"
 #include "vita_fast3d_abi.hpp"
 #include "vita_fast3d_bridge.hpp"
+#include "vita_recomp_memory.hpp"
 
 namespace {
 class VitaWindow final : public Fast::GfxWindowBackend {
@@ -64,17 +65,17 @@ private:
 class VitaRenderer final : public ultramodern::renderer::RendererContext {
 public:
     explicit VitaRenderer(std::uint8_t* rdram)
-        : rdram_(rdram), bridge_(rdram, 64U * 1024U * 1024U),
+        : rdram_(rdram), bridge_(rdram, btga::vita::kRdramSize32),
           interpreter_(std::make_shared<Fast::Interpreter>()) {
         Fast::GfxSetInstance(interpreter_);
         interpreter_->Init(&window_, &api_, "VitaTanx GA", true,
                            960, 544, 0, 0);
-        interpreter_->SetRdramMemory(rdram_, 64U * 1024U * 1024U);
+        interpreter_->SetRdramMemory(rdram_, btga::vita::kRdramSize32);
         interpreter_->SetNativeDimensions(320.0F, 240.0F);
         interpreter_->SetDisplayConfiguration(960, 544, 0, 0,
                                               (4.0F / 3.0F) / (960.0F / 544.0F));
         bridge_.SetInterpreter(interpreter_.get());
-        Fast::gfx_set_target_ucode(ucode_f3dex);
+        Fast::gfx_set_target_ucode(ucode_f3dex2);
     }
     ~VitaRenderer() override = default;
     bool valid() override { return interpreter_ != nullptr; }
@@ -84,7 +85,7 @@ public:
     void send_dl(const OSTask* task) override {
         if (!frame_started_) { interpreter_->StartFrame(); frame_started_ = true; }
         const std::uint32_t address = static_cast<std::uint32_t>(task->t.data_ptr);
-        void* list = bridge_.BuildDisplayList(address, GBI_1);
+        void* list = bridge_.BuildDisplayList(address, GBI_2);
         if (list != nullptr) interpreter_->Run(static_cast<Gfx*>(list), matrices_);
     }
     void send_dummy_workload(std::uint32_t) override {}

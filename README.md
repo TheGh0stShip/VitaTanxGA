@@ -13,8 +13,9 @@ The primary VPK currently includes:
 - all 1,879 translated retail functions across 35 generated translation units;
 - N64 scheduler, threads, message queues, timers, controller, PI, AI, VI, SP,
   DP, and audio-microcode services;
-- a live F3DEX 2.07 display-list renderer backed by vitaGL;
-- Vita controls, analog input, rumble, and threaded stereo audio;
+- a live F3DEX 2.07/GBI2 display-list renderer backed by vitaGL;
+- four-player Vita/PSTV controls, analog input, external-controller rumble,
+  and rate-converted 48 kHz threaded stereo audio;
 - Controller Pak profile storage in standard 32 KiB `.mpk` images;
 - strict runtime identification of the supported ROM; and
 - ARMv7-A hard-float ELF validation for the executable and linked libraries.
@@ -68,8 +69,9 @@ The ROM is never embedded in the VPK. Copy the same verified ROM to the target:
 ux0:data/VitaTanxGA/baserom.z64
 ```
 
-Controller Pak profiles and `runtime.log` are written beside it. An absent or
-incorrect ROM is rejected before the translated game starts.
+Controller Pak profiles are written under `ux0:data/VitaTanxGA/saves`, and
+`runtime.log` is written beside the ROM. An absent or incorrect ROM is rejected
+before the translated game starts.
 
 ## Architecture
 

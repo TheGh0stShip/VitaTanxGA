@@ -23,9 +23,11 @@ struct HostViewport { s16 scale[4]; s16 trans[4]; };
 }
 
 UcodeInfo GBIMicrocode_DetectVersion(u32, u32, u32, u32) {
-    // BattleTanx GA embeds "RSP Gfx ucode F3DEX fifo 2.07". Runtime ucode
-    // switches therefore remain on the same GBI1 command layout.
-    return {GBI_1};
+    // BattleTanx GA's "F3DEX fifo 2.07" microcode uses the second-generation
+    // command layout (for example G_ENDDL=0xDF and G_VTX=0x01). The embedded
+    // version string does not spell this as "F3DEX2", so classify by the
+    // command ABI rather than the display name.
+    return {GBI_2};
 }
 
 Fast3DMemoryBridge::Fast3DMemoryBridge(u8* rdram, u32 rdram_size)

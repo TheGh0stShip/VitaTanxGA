@@ -493,7 +493,7 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
     unsigned int prog_format = 0;
     void* prog_bin = nullptr;
     char fname[256];
-    sprintf(fname, "ux0:data/DaedalusX64/ShaderCache_F3D/%016llX_%016llX_%d.bin", shader_id1, shader_id0, SHADER_MAGIC);
+    sprintf(fname, "ux0:data/VitaTanxGA/shader_cache/%016llX_%016llX_%d.bin", shader_id1, shader_id0, SHADER_MAGIC);
     FILE* f = fopen(fname, "rb");
     if (f) {
         shader_program = glCreateProgram();

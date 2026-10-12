@@ -63,19 +63,21 @@ bool ultramodern::is_game_started() {
 }
 
 recomp::SaveType recomp::get_save_type() {
-    return SaveType::AllowAll;
+    // The retail cartridge has no EEPROM, SRAM, or FlashRAM. Profiles live on
+    // Controller Pak and are handled independently by controller_pak_hle.cpp.
+    return SaveType::None;
 }
 
 bool recomp::sram_allowed() {
-    return true;
+    return false;
 }
 
 bool recomp::eeprom_allowed() {
-    return true;
+    return false;
 }
 
 bool recomp::flashram_allowed() {
-    return true;
+    return false;
 }
 
 std::u8string recomp::current_game_id() {

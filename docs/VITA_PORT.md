@@ -24,21 +24,30 @@ The translated game is linked to a Vita-focused subset of N64ModernRuntime:
 - cooperative N64 threads, scheduling, message queues, events, and timers;
 - VI, AI, PI, SP, and DP services;
 - translated audio microcode;
-- Vita controller, analog, rumble, audio, and storage callbacks;
+- four-player Vita/PSTV controller, analog, external-controller rumble, audio,
+  and storage callbacks;
 - Controller Pak HLE backed by emulator-compatible 32 KiB `.mpk` files; and
 - a static translated-function lookup table with no desktop JIT dependency.
 
-RDRAM is a bounded 64 MiB allocation. The runtime loads the retail program at
+RDRAM is a bounded 8 MiB Expansion Pak allocation. The runtime loads the retail program at
 its original guest address and initializes the values normally supplied by
 IPL3 before entering the translated cartridge entrypoint.
 
+The original AI frequency is converted into Vita's fixed 48 kHz main-output
+rate. Buffered-frame reports are converted back to the guest rate so the
+retail audio scheduler retains its original timing model.
+
 ## Graphics
 
-The renderer consumes the game's live F3DEX 2.07 display lists. A bridge
+The renderer consumes the game's live F3DEX 2.07 display lists using their
+second-generation GBI2 command layout. A bridge
 validates guest ranges, converts big-endian command payloads and structures,
 stages textures safely, and passes the resulting lists to a vitaGL rendering
 backend derived from the open-source Fast3D implementation used by
 DaedalusX64-vitaGL.
+
+Runtime-compiled vitaGL shaders are cached under the title's own
+`ux0:data/VitaTanxGA/shader_cache` directory.
 
 The renderer remains driven by the original game. It does not package a
 hand-selected subset of extracted levels or substitute a separately authored
@@ -57,8 +66,8 @@ The file must be exactly 8 MiB, big-endian `.z64`, and match SHA-1
 `runtime.log` and rejected before game execution.
 
 The original game stores profiles on Controller Pak rather than a cartridge
-save chip. The port persists those files beside the ROM as standard `.mpk`
-images using explicit on-disk widths and byte order.
+save chip. The port persists those files under `ux0:data/VitaTanxGA/saves` as
+standard `.mpk` images using explicit on-disk widths and byte order.
 
 ## Build and validation
 

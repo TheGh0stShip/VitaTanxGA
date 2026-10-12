@@ -80,7 +80,8 @@ vita-assets: verify-rom
 
 vita-legacy: vita-assets
 	@test -n "$(VITASDK)" || (echo "Set VITASDK to your VitaSDK installation" >&2; exit 2)
-	cmake -S port/vita -B $(VITA_BUILD) -DCMAKE_BUILD_TYPE=Release
+	cmake -S port/vita -B $(VITA_BUILD) -DCMAKE_BUILD_TYPE=Release \
+		-DBTGA_BUILD_LEGACY=ON
 	cmake --build $(VITA_BUILD)
 
 vita-recomp-bootstrap:

@@ -17,13 +17,15 @@ include("${VITASDK}/share/vita.cmake" REQUIRED)
 option(BTGA_BUILD_RECOMP "ARM compile-check locally generated full-game translation" OFF)
 option(BTGA_BUILD_RECOMP_RUNTIME "Compile the Vita N64 runtime integration" OFF)
 option(BTGA_BUILD_FULL_RECOMP_APP "Link the translated game as a Vita application" OFF)
+option(BTGA_BUILD_LEGACY "Build the obsolete portable gameplay prototype" OFF)
 
 set(VITA_APP_NAME "VitaTanx GA")
 # Reserved for this homebrew port; change only before distributing a build.
 set(VITA_TITLEID "VTGA00001")
 set(VITA_VERSION "00.01")
 
-add_executable(${PROJECT_NAME}
+if(BTGA_BUILD_LEGACY)
+  add_executable(${PROJECT_NAME}
   ../runtime/src/btga_runtime.c
   ../runtime/src/btga_campaign.c
   ../runtime/src/btga_tank.c
@@ -37,22 +39,22 @@ add_executable(${PROJECT_NAME}
   ../runtime/src/btga_texture.c
   src/main.c
   src/vita_platform.c
-)
+  )
 
-target_include_directories(${PROJECT_NAME} PRIVATE
+  target_include_directories(${PROJECT_NAME} PRIVATE
   include
   ../runtime/include
-)
-target_compile_features(${PROJECT_NAME} PRIVATE c_std_11)
-target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wpedantic)
+  )
+  target_compile_features(${PROJECT_NAME} PRIVATE c_std_11)
+  target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wpedantic)
 # Leave room between RX and RW load segments for vita-elf-create's SCE
 # metadata. GNU ld's default adjacent-page layout becomes invalid once the
 # executable text approaches the next 64 KiB boundary.
-target_link_options(${PROJECT_NAME} PRIVATE
+  target_link_options(${PROJECT_NAME} PRIVATE
   "-Wl,--section-start=.init_array=0x8103F000"
   "-Wl,-Tdata=0x81040000"
-)
-target_link_libraries(${PROJECT_NAME} PRIVATE
+  )
+  target_link_libraries(${PROJECT_NAME} PRIVATE
   vita2d
   SceCtrl_stub
   SceAudio_stub
@@ -68,7 +70,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
   freetype
   z
   m
-)
+  )
+endif()
 
 if(BTGA_BUILD_RECOMP)
   set(BTGA_RECOMP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../recomp")
@@ -208,7 +211,8 @@ if(BTGA_BUILD_RECOMP)
   endif()
 endif()
 
-vita_create_self(${PROJECT_NAME}.self ${PROJECT_NAME})
+if(BTGA_BUILD_LEGACY)
+  vita_create_self(${PROJECT_NAME}.self ${PROJECT_NAME})
 
 # Game data is extracted from the user's verified ROM by `make vita-assets`.
 # It is deliberately ignored by Git. Package only assets opened by this
@@ -260,8 +264,9 @@ foreach(asset IN LISTS VITA_GAME_FILES)
   list(APPEND VITA_GAME_FILE_ARGS FILE "${asset}" "assets/${destination}")
 endforeach()
 
-vita_create_vpk(${PROJECT_NAME}.vpk ${VITA_TITLEID} ${PROJECT_NAME}.self
-  VERSION ${VITA_VERSION}
-  NAME ${VITA_APP_NAME}
-  ${VITA_GAME_FILE_ARGS}
-)
+  vita_create_vpk(${PROJECT_NAME}.vpk ${VITA_TITLEID} ${PROJECT_NAME}.self
+    VERSION ${VITA_VERSION}
+    NAME ${VITA_APP_NAME}
+    ${VITA_GAME_FILE_ARGS}
+  )
+endif()
