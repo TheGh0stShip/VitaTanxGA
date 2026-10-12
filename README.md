@@ -14,9 +14,11 @@ The repository currently produces an installable PS Vita VPK that:
 - runs platform-neutral game state at a fixed 30 Hz simulation rate;
 - maps Vita buttons and both analog sticks into a portable input structure;
 - initializes Vita2D rendering;
-- loads and displays a decoded game image from `app0:assets`;
+- traverses placed models and renders decoded F3DEX2 world geometry as a
+  top-down wireframe preview;
 - loads and validates the first extracted world's big-endian component tables;
-- packages decoded worlds, images, scripts, and libmus audio resources; and
+- packages decoded worlds, shared world pools, images, scripts, and libmus
+  audio resources; and
 - validates the executable and code-bearing libraries for ABI consistency.
 
 This is a **port bootstrap**, not yet a playable version of the game. Recovered
@@ -53,7 +55,8 @@ make vita-check
 1. verifies the ROM;
 2. extracts decoded game resources into the ignored
    `assets/extracted/us/vita` directory;
-3. validates the extracted first-level world through the portable C loader;
+3. validates the extracted first-level world and every referenced geometry
+   chunk through the portable C loaders;
 4. cross-compiles the Vita executable;
 5. packages the extracted resources into the VPK;
 6. runs the host-side portable-runtime tests; and

@@ -22,6 +22,8 @@ set(VITA_VERSION "00.01")
 add_executable(${PROJECT_NAME}
   ../runtime/src/btga_runtime.c
   ../runtime/src/btga_world.c
+  ../runtime/src/btga_geometry.c
+  ../runtime/src/btga_scene.c
   src/main.c
   src/vita_platform.c
 )

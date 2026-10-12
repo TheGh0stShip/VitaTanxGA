@@ -3,6 +3,7 @@
 #include <assert.h>
 
 int btga_world_tests(void);
+int btga_geometry_tests(void);
 
 int main(void) {
     BtgaRuntime runtime;
@@ -27,5 +28,6 @@ int main(void) {
     btga_runtime_update(&runtime, &input, 0);
     assert(!runtime.running);
     btga_world_tests();
+    btga_geometry_tests();
     return 0;
 }

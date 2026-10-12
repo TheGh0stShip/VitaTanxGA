@@ -31,17 +31,21 @@ make vita-check
 
 The package is written to `port/vita/build/vitatanxga.vpk`. `make vita`
 first verifies the supplied ROM and stages decoded LZARI worlds and images,
-scripts, and libmus data into the ignored `assets/extracted/us/vita` tree.
+the shared texture/state/geometry pools, scripts, and libmus data into the
+ignored `assets/extracted/us/vita` tree.
 Those generated files are packaged under `app0:assets/`; the ROM itself is
 never packaged or committed. The executable runs a bounded 30 Hz fixed-step
 simulation, maps Vita controls to portable button/analog state, and lets the
-runtime select a decoded packaged image without depending on Vita APIs. It
+runtime select decoded packaged assets without depending on Vita APIs. It
 also reads the first world's split component files, decodes their big-endian
-fields explicitly, validates table and pool ranges, and reports the recovered
-placement/model/reference counts on the bootstrap screen.
+fields explicitly, validates table and pool ranges, interprets the referenced
+F3DEX2 vertex/triangle command streams, and traverses the recovered
+placement/model/part/reference graph. The Vita adapter currently draws the
+result as a top-down wireframe preview.
 
-`make vita-check` tests the portable loader against both synthetic malformed
-inputs and the extracted first-level data, then validates that the port ELF is
+`make vita-check` tests the portable loaders against synthetic malformed
+inputs and all 1,287 geometry references in the extracted first-level data,
+then validates that the port ELF is
 32-bit ARMv7-A and uses the same VFP-register calling convention as the
 installed VitaSDK. This is a cross-build gate only; it is not a
 physical-hardware validation claim. Do not install or launch it on hardware

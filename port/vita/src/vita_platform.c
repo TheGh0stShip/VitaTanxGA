@@ -1,4 +1,5 @@
 #include "vita_platform.h"
+#include "btga_scene.h"
 
 #include <psp2/ctrl.h>
 #include <psp2/kernel/processmgr.h>
@@ -6,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 enum {
     kColorBlack = RGBA8(8, 11, 16, 255),
@@ -24,6 +26,19 @@ typedef struct LoadedFile {
     uint8_t *data;
     size_t size;
 } LoadedFile;
+
+static LoadedFile s_world_files[7];
+static LoadedFile s_geometry_pool;
+static BtgaWorldComponents s_world_components;
+
+typedef struct DrawSceneContext {
+    int16_t placement_x;
+    int16_t placement_z;
+    uint16_t placement_yaw;
+    float sine;
+    float cosine;
+    bool initialized;
+} DrawSceneContext;
 
 static bool load_file(const char *path, LoadedFile *loaded) {
     FILE *file = fopen(path, "rb");
@@ -57,25 +72,62 @@ static bool load_first_world(void) {
         "app0:assets/worlds/level_world_000/component5.bin",
         "app0:assets/worlds/level_world_000/component6.bin",
     };
-    LoadedFile files[7] = {0};
-    BtgaWorldComponents components;
     bool valid = false;
     unsigned int index;
 
     for (index = 0; index < 7; index++) {
-        if (!load_file(paths[index], &files[index])) goto cleanup;
+        if (!load_file(paths[index], &s_world_files[index])) goto cleanup;
     }
-    if (files[0].size != 4) goto cleanup;
-    components = (BtgaWorldComponents){
-        files[1].data, files[1].size, files[2].data, files[2].size,
-        files[3].data, files[3].size, files[4].data, files[4].size,
-        files[5].data, files[5].size, files[6].data, files[6].size,
-        btga_read_be_u32(files[0].data),
+    if (!load_file("app0:assets/world-pools/geometry.bin", &s_geometry_pool) ||
+        s_world_files[0].size != 4) goto cleanup;
+    s_world_components = (BtgaWorldComponents){
+        s_world_files[1].data, s_world_files[1].size,
+        s_world_files[2].data, s_world_files[2].size,
+        s_world_files[3].data, s_world_files[3].size,
+        s_world_files[4].data, s_world_files[4].size,
+        s_world_files[5].data, s_world_files[5].size,
+        s_world_files[6].data, s_world_files[6].size,
+        btga_read_be_u32(s_world_files[0].data),
     };
-    valid = btga_world_validate(&components, &s_world_summary);
+    valid = btga_world_validate(&s_world_components, &s_world_summary);
+    if (valid) return true;
 cleanup:
-    for (index = 0; index < 7; index++) free(files[index].data);
+    for (index = 0; index < 7; index++) {
+        free(s_world_files[index].data);
+        s_world_files[index] = (LoadedFile){0};
+    }
+    free(s_geometry_pool.data);
+    s_geometry_pool = (LoadedFile){0};
     return valid;
+}
+
+static bool draw_world_triangle(const BtgaPlacedTriangle *triangle, void *context) {
+    DrawSceneContext *draw = context;
+    float points[3][2];
+    unsigned int index;
+    if (!draw->initialized || draw->placement_x != triangle->placement_x ||
+        draw->placement_z != triangle->placement_z ||
+        draw->placement_yaw != triangle->placement_yaw) {
+        float angle = (float)triangle->placement_yaw * (6.28318530718f / 65536.0f);
+        draw->placement_x = triangle->placement_x;
+        draw->placement_z = triangle->placement_z;
+        draw->placement_yaw = triangle->placement_yaw;
+        draw->sine = sinf(angle);
+        draw->cosine = cosf(angle);
+        draw->initialized = true;
+    }
+    for (index = 0; index < 3; index++) {
+        float local_x = triangle->vertices[index].x;
+        float local_z = triangle->vertices[index].z;
+        float world_x = triangle->placement_x + draw->cosine * local_x - draw->sine * local_z;
+        float world_z = triangle->placement_z + draw->sine * local_x + draw->cosine * local_z;
+        points[index][0] = 420.0f + (world_x + 824.0f) * 0.065f;
+        points[index][1] = 500.0f - (world_z + 10703.0f) * 0.0235f;
+    }
+    vita2d_draw_line(points[0][0], points[0][1], points[1][0], points[1][1], kColorGray);
+    vita2d_draw_line(points[1][0], points[1][1], points[2][0], points[2][1], kColorGray);
+    vita2d_draw_line(points[2][0], points[2][1], points[0][0], points[0][1], kColorGray);
+    return true;
 }
 
 static int16_t normalize_axis(uint8_t value) {
@@ -154,13 +206,14 @@ void vita_platform_begin_frame(void) {
 
 void vita_platform_draw(const BtgaRuntime *runtime) {
     const BtgaWorldSummary *world = vita_platform_world_summary();
+    BtgaSceneSummary scene = {0};
+    DrawSceneContext draw_context = {0};
     vita2d_draw_rectangle(0, 0, 960, 544, kColorBlack);
     vita2d_draw_rectangle(54, 112, 8, 270, kColorOrange);
     if (runtime->screen == BTGA_SCREEN_ASSET_PREVIEW && s_preview != NULL) {
-        float width = (float)vita2d_texture_get_width(s_preview);
-        float height = (float)vita2d_texture_get_height(s_preview);
-        float scale = 250.0f / (width > height ? width : height);
-        vita2d_draw_texture_scale(s_preview, 650.0f, 135.0f, scale, scale);
+        btga_scene_visit(&s_world_components, s_geometry_pool.data,
+                         s_geometry_pool.size, 1500, draw_world_triangle,
+                         &draw_context, &scene);
     }
     vita2d_pgf_draw_text(s_font, 88, 166, kColorWhite, 1.55f, "VitaTanx GA");
     vita2d_pgf_draw_text(s_font, 90, 211, kColorOrange, 0.95f,
@@ -179,6 +232,11 @@ void vita_platform_draw(const BtgaRuntime *runtime) {
                               (unsigned long)world->model_count,
                               (unsigned long)world->reference_count);
     }
+    if (runtime->screen == BTGA_SCREEN_ASSET_PREVIEW) {
+        vita2d_pgf_draw_textf(s_font, 610, 515, kColorOrange, 0.58f,
+                              "%lu placed mesh triangles",
+                              (unsigned long)scene.visited_triangle_count);
+    }
     vita2d_pgf_draw_text(s_font, 90, 430, kColorWhite, 0.70f,
                          "CROSS: asset preview   CIRCLE: back   START: exit");
 }
@@ -189,6 +247,7 @@ void vita_platform_end_frame(void) {
 }
 
 void vita_platform_shutdown(void) {
+    unsigned int index;
     if (s_preview != NULL) {
         vita2d_free_texture(s_preview);
         s_preview = NULL;
@@ -197,5 +256,11 @@ void vita_platform_shutdown(void) {
         vita2d_free_pgf(s_font);
         s_font = NULL;
     }
+    for (index = 0; index < 7; index++) {
+        free(s_world_files[index].data);
+        s_world_files[index] = (LoadedFile){0};
+    }
+    free(s_geometry_pool.data);
+    s_geometry_pool = (LoadedFile){0};
     vita2d_fini();
 }

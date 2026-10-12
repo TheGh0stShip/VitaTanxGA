@@ -13,17 +13,22 @@ verify-rom:
 runtime-test:
 	$(CC) -std=c11 -Wall -Wextra -Werror -Wpedantic \
 		-Iport/runtime/include port/runtime/src/btga_runtime.c \
-		port/runtime/src/btga_world.c port/runtime/tests/runtime_test.c \
-		port/runtime/tests/world_test.c -o /tmp/vitatanxga-runtime-test
+		port/runtime/src/btga_world.c port/runtime/src/btga_geometry.c \
+		port/runtime/src/btga_scene.c \
+		port/runtime/tests/runtime_test.c port/runtime/tests/world_test.c \
+		port/runtime/tests/geometry_test.c -o /tmp/vitatanxga-runtime-test
 	/tmp/vitatanxga-runtime-test
 
 runtime-asset-test: vita-assets
 	$(CC) -std=c11 -Wall -Wextra -Werror -Wpedantic \
 		-Iport/runtime/include port/runtime/src/btga_world.c \
+		port/runtime/src/btga_geometry.c port/runtime/src/btga_scene.c \
 		port/runtime/tests/world_asset_test.c -o /tmp/vitatanxga-world-asset-test
-	/tmp/vitatanxga-world-asset-test $(VITA_ASSETS)/worlds/level_world_000
+	/tmp/vitatanxga-world-asset-test $(VITA_ASSETS)/worlds/level_world_000 \
+		$(VITA_ASSETS)/world-pools/geometry.bin
 
 vita-assets: verify-rom
+	$(PYTHON) tools/extract_world_pools.py $(VITA_ASSETS)/world-pools --rom $(ROM)
 	$(PYTHON) tools/inventory_lzari_assets.py --rom $(ROM) --output $(VITA_ASSETS)/lzari_manifest.json --extract-dir $(VITA_ASSETS)/lzari --split-bundles
 	$(PYTHON) tools/extract_lzari_images.py $(VITA_ASSETS)/images --rom $(ROM)
 	$(PYTHON) tools/extract_lzari_worlds.py $(VITA_ASSETS)/worlds --rom $(ROM)
