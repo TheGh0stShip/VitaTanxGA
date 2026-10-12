@@ -18,6 +18,12 @@ typedef struct BtgaMissionText {
 
 enum { BTGA_CAMPAIGN_SLOT_COUNT = 5 };
 
+typedef struct BtgaTeamColor {
+    uint8_t red;
+    uint8_t green;
+    uint8_t blue;
+} BtgaTeamColor;
+
 typedef struct BtgaMissionConfig {
     uint32_t track;
     uint32_t mode;
@@ -30,5 +36,6 @@ bool btga_campaign_mission_text(const uint8_t *data, size_t size,
                                 uint8_t mission, BtgaMissionText *text);
 bool btga_campaign_mission_config(const uint8_t *data, size_t size,
                                   uint8_t mission, BtgaMissionConfig *config);
+bool btga_campaign_team_color(uint8_t team, BtgaTeamColor *color);
 
 #endif

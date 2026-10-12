@@ -16,6 +16,19 @@ int btga_campaign_tests(void) {
     assert(!btga_campaign_mission_text(data, sizeof(data) - 1, 0, &text));
     assert(!btga_campaign_mission_text(data, sizeof(data), 19, &text));
     {
+        BtgaTeamColor color;
+        assert(btga_campaign_team_color(0, &color));
+        assert(color.red == 0x32 && color.green == 0x02 && color.blue == 0x00);
+        assert(btga_campaign_team_color(1, &color));
+        assert(color.red == 0x00 && color.green == 0x1E && color.blue == 0x00);
+        assert(btga_campaign_team_color(2, &color));
+        assert(color.red == 0x00 && color.green == 0x00 && color.blue == 0x24);
+        assert(btga_campaign_team_color(3, &color));
+        assert(color.red == 0x57 && color.green == 0x57 && color.blue == 0x00);
+        assert(!btga_campaign_team_color(4, &color));
+        assert(!btga_campaign_team_color(0, NULL));
+    }
+    {
         uint8_t configs[19 * 0x70] = {0};
         BtgaMissionConfig config;
         configs[7] = 0x1A;

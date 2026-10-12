@@ -307,6 +307,12 @@ bool btga_runtime_add_enemy(BtgaRuntime *runtime, float x, float y, float z,
 
 bool btga_runtime_add_enemy_kind(BtgaRuntime *runtime, float x, float y, float z,
                                  uint16_t yaw, uint8_t tank_kind) {
+    return btga_runtime_add_enemy_configured(runtime, x, y, z, yaw, tank_kind, 1);
+}
+
+bool btga_runtime_add_enemy_configured(BtgaRuntime *runtime, float x, float y,
+                                       float z, uint16_t yaw,
+                                       uint8_t tank_kind, uint8_t team) {
     unsigned int index;
     if (runtime == NULL) return false;
     for (index = 0; index < BTGA_MAX_ENEMIES; index++) {
@@ -317,7 +323,7 @@ bool btga_runtime_add_enemy_kind(BtgaRuntime *runtime, float x, float y, float z
             .spawn_x = x, .spawn_y = y, .spawn_z = z,
             .spawn_yaw = (float)yaw * (6.28318530718f / 65536.0f),
             .health = 100, .fire_cooldown = 30,
-            .tank_kind = tank_kind,
+            .tank_kind = tank_kind, .team = team,
             .configured = true, .active = true,
         };
         return true;
@@ -334,6 +340,7 @@ bool btga_runtime_add_ally(BtgaRuntime *runtime, float x, float y, float z,
         if (actor->configured && actor->spawn_x == x && actor->spawn_y == y &&
             actor->spawn_z == z && !actor->allied) {
             actor->allied = true;
+            actor->team = 0;
             return true;
         }
     }

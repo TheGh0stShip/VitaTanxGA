@@ -103,6 +103,8 @@ typedef struct DrawSceneContext {
     uint32_t texture_state_offset;
     uint32_t texture_state_size;
     bool actor;
+    bool team_color_active;
+    BtgaTeamColor team_color;
 } DrawSceneContext;
 
 static ProjectedTriangle s_projected_triangles[kMaximumProjectedTriangles];
@@ -583,6 +585,11 @@ static bool draw_world_triangle(const BtgaPlacedTriangle *triangle, void *contex
             triangle->state_size <= s_state_pool.size - triangle->state_offset)
             btga_material_color(s_state_pool.data + triangle->state_offset,
                                 triangle->state_size, &draw->material);
+        if (draw->team_color_active && !draw->material.from_primitive) {
+            draw->material.red = draw->team_color.red;
+            draw->material.green = draw->team_color.green;
+            draw->material.blue = draw->team_color.blue;
+        }
         draw->material_cached = true;
     }
     if (draw->texture_offset != triangle->texture_offset ||
@@ -707,6 +714,8 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
     sceGxmSetFrontDepthWriteEnable(vita2d_get_context(), SCE_GXM_DEPTH_WRITE_ENABLED);
     sceGxmSetBackDepthWriteEnable(vita2d_get_context(), SCE_GXM_DEPTH_WRITE_ENABLED);
     draw.actor = true;
+    draw.team_color_active = btga_campaign_team_color(0, &draw.team_color);
+    draw.material_cached = false;
     for (tank_part = 0; tank_part < s_player_tank.part_count; tank_part++) {
         float part_turn = runtime->player.yaw;
         uint16_t part_yaw;
@@ -726,6 +735,9 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
         const BtgaTankDefinition *tank;
         const uint16_t *model_indices;
         if (!enemy->active) continue;
+        draw.team_color_active = btga_campaign_team_color(enemy->team,
+                                                          &draw.team_color);
+        draw.material_cached = false;
         tank = enemy->tank_kind == 4 ? &s_enemy_tank : &s_player_tank;
         model_indices = enemy->tank_kind == 4 ? s_enemy_model_indices :
                                                 s_player_model_indices;
@@ -742,6 +754,8 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
                                   &tank_triangles)) return 0;
         }
     }
+    draw.team_color_active = false;
+    draw.material_cached = false;
     for (projectile_index = 0; projectile_index < BTGA_MAX_PROJECTILES;
          projectile_index++) {
         const BtgaProjectile *projectile = &runtime->projectiles[projectile_index];

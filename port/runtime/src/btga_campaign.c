@@ -2,6 +2,14 @@
 
 enum { kMissionConfigSize = 0x70, kMissionCount = 19 };
 
+/* D_80116580: the retail tank environment-color palette. */
+static const BtgaTeamColor kTeamColors[] = {
+    {0x32, 0x02, 0x00},
+    {0x00, 0x1E, 0x00},
+    {0x00, 0x00, 0x24},
+    {0x57, 0x57, 0x00},
+};
+
 static uint32_t read_be_u32(const uint8_t *p) {
     return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
            ((uint32_t)p[2] << 8) | p[3];
@@ -74,5 +82,12 @@ bool btga_campaign_mission_config(const uint8_t *data, size_t size,
         config->teams[index] = record[0x0D + index];
         config->tank_kinds[index] = read_be_u32(record + 0x18 + index * 4);
     }
+    return true;
+}
+
+bool btga_campaign_team_color(uint8_t team, BtgaTeamColor *color) {
+    if (color == NULL || team >= sizeof(kTeamColors) / sizeof(kTeamColors[0]))
+        return false;
+    *color = kTeamColors[team];
     return true;
 }
