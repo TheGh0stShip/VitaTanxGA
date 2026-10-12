@@ -860,7 +860,21 @@ void GfxRenderingAPIOGL::DrawTriangles(float buf_vbo[], size_t buf_vbo_len, size
 
     SetPerDrawUniforms();
 
+#ifdef __vita__
+    // CPU staging memory is not GXM mapped.  Reserve only the bytes needed by
+    // this draw from vitaGL's per-frame pool, rather than pinning a 10 MiB
+    // slice before the backend has allocated textures and command data.
+    const size_t vertex_bytes = buf_vbo_len * sizeof(float);
+    void* mapped_vertices = vglAllocFromScratch(vertex_bytes);
+    if (mapped_vertices == nullptr) {
+        btga_vita_log("vitaGL vertex scratch allocation failed");
+        return;
+    }
+    memcpy(mapped_vertices, buf_vbo, vertex_bytes);
+    vglBufferData(GL_ARRAY_BUFFER, mapped_vertices);
+#else
     vglBufferData(GL_ARRAY_BUFFER, buf_vbo);
+#endif
     glDrawArrays(GL_TRIANGLES, 0, 3 * buf_vbo_num_tris);
 }
 

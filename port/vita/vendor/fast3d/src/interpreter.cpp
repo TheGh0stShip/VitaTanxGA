@@ -117,19 +117,13 @@ constexpr size_t MAX_TRI_BUFFER = 256;
 Interpreter::Interpreter() {
     mRsp = new RSP();
     mRdp = new RDP();
-#ifdef __vita__
-    mBufVbo = static_cast<float*>(vglAllocFromScratch(10 * 1024 * 1024));
-#else
     mBufVbo = new float[MAX_TRI_BUFFER * (32 * 3)];
-#endif
 }
 
 Interpreter::~Interpreter() {
     delete mRsp;
     delete mRdp;
-#ifndef __vita__
     delete[] mBufVbo;
-#endif
 }
 
 static std::weak_ptr<Interpreter> mInstance;
@@ -146,9 +140,6 @@ void Interpreter::Flush() {
     if (mBufVboNumTris > 0) {
         //mRapi->SetCurrentPrimDepth((float)mRdp->prim_depth / N64_PRIM_DEPTH_MAX);
         mRapi->DrawTriangles(mBufVbo, mBufVboLen, mBufVboNumTris);
-#ifdef __vita__
-        mBufVbo += mBufVboLen;
-#endif
         mBufVboLen = 0;
         mBufVboNumTris = 0;
     }
@@ -5677,7 +5668,6 @@ void Interpreter::EndFrame() {
     mWapi->SwapBuffersBegin();
     mRapi->FinishRender();
     mWapi->SwapBuffersEnd();
-	mBufVbo = (float*)vglAllocFromScratch(10 * 1024 * 1024);
 }
 
 void gfx_set_target_ucode(UcodeHandlers ucode) {
