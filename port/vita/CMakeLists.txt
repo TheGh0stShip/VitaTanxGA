@@ -133,6 +133,7 @@ if(BTGA_BUILD_RECOMP)
       ${BTGA_RECOMP_ROOT}/generated/n_aspMain.cpp
       recomp/vita_recomp_lookup.cpp
       recomp/vita_recomp_core.cpp
+      recomp/vita_recomp_diagnostics.cpp
       recomp/vita_runtime_compat.cpp
       recomp/vita_runtime_patches.cpp
       recomp/vita_fast3d_bridge.cpp
@@ -156,6 +157,7 @@ if(BTGA_BUILD_RECOMP)
       "${BTGA_N64_RUNTIME_ROOT}/thirdparty/concurrentqueue"
       "${BTGA_N64_RUNTIME_ROOT}/thirdparty/sse2neon"
       "${CMAKE_CURRENT_SOURCE_DIR}/vendor/fast3d/include"
+      "${CMAKE_CURRENT_SOURCE_DIR}/recomp"
       "${CMAKE_CURRENT_SOURCE_DIR}/recomp/include"
     )
     target_compile_options(btga_vita_recomp_runtime PRIVATE

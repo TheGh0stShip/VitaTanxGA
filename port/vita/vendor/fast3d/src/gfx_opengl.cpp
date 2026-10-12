@@ -20,6 +20,7 @@
 #include "fast/backends/gfx_opengl.h"
 #ifdef __vita__
 #include "fast/vita_compat.h"
+#include "vita_recomp_diagnostics.hpp"
 #endif
 
 #ifdef __vita__
@@ -496,17 +497,27 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
     sprintf(fname, "ux0:data/VitaTanxGA/shader_cache/%016llX_%016llX_%d.bin", shader_id1, shader_id0, SHADER_MAGIC);
     FILE* f = fopen(fname, "rb");
     if (f) {
-        shader_program = glCreateProgram();
         fseek(f, 0, SEEK_END);
         int file_size = ftell(f);
         fseek(f, 0, SEEK_SET);
-        prog_bin = malloc(file_size - sizeof(size_t));
-        fread(&num_floats, 1, sizeof(size_t), f);
-        fread(prog_bin, 1, file_size - sizeof(size_t), f);
+        constexpr int max_shader_cache_size = 4 * 1024 * 1024;
+        if (file_size > (int)sizeof(size_t) && file_size <= max_shader_cache_size) {
+            const size_t binary_size = (size_t)file_size - sizeof(size_t);
+            prog_bin = malloc(binary_size);
+            if (prog_bin && fread(&num_floats, 1, sizeof(size_t), f) == sizeof(size_t) &&
+                fread(prog_bin, 1, binary_size, f) == binary_size) {
+                shader_program = glCreateProgram();
+                glProgramBinary(shader_program, 0, prog_bin, binary_size);
+                glGetProgramiv(shader_program, GL_LINK_STATUS, &success);
+            }
+            free(prog_bin);
+            prog_bin = nullptr;
+        }
         fclose(f);
-        glProgramBinary(shader_program, 0, prog_bin, file_size - sizeof(size_t));
-        free(prog_bin);
-        goto program_ready;
+        if (shader_program != 0 && success) goto program_ready;
+        if (shader_program != 0) glDeleteProgram(shader_program);
+        shader_program = 0;
+        remove(fname);
     }
 
     {
@@ -515,6 +526,9 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
         glCompileShader(vertex_shader);
         glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
         if (!success) {
+            char info[512]{};
+            glGetShaderInfoLog(vertex_shader, sizeof(info), nullptr, info);
+            btga_vita_log(info[0] ? info : "vitaGL vertex shader compilation failed");
             abort();
         }
 
@@ -523,6 +537,9 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
         glCompileShader(fragment_shader);
         glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
         if (!success) {
+            char info[512]{};
+            glGetShaderInfoLog(fragment_shader, sizeof(info), nullptr, info);
+            btga_vita_log(info[0] ? info : "vitaGL fragment shader compilation failed");
             abort();
         }
 
@@ -530,16 +547,28 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
         glAttachShader(shader_program, vertex_shader);
         glAttachShader(shader_program, fragment_shader);
         glLinkProgram(shader_program);
+        glGetProgramiv(shader_program, GL_LINK_STATUS, &success);
+        if (!success) {
+            char info[512]{};
+            glGetProgramInfoLog(shader_program, sizeof(info), nullptr, info);
+            btga_vita_log(info[0] ? info : "vitaGL shader program link failed");
+            abort();
+        }
+        glDeleteShader(vertex_shader);
+        glDeleteShader(fragment_shader);
 
         f = fopen(fname, "wb");
         if (f) {
             glGetProgramiv(shader_program, GL_PROGRAM_BINARY_LENGTH, &prog_size);
-            prog_bin = malloc(prog_size);
-            glGetProgramBinary(shader_program, prog_size, &prog_len, &prog_format, prog_bin);
-            fwrite(&num_floats, 1, sizeof(size_t), f);
-            fwrite(prog_bin, 1, prog_len, f);
+            prog_bin = prog_size > 0 ? malloc(prog_size) : nullptr;
+            if (prog_bin) {
+                glGetProgramBinary(shader_program, prog_size, &prog_len, &prog_format, prog_bin);
+                fwrite(&num_floats, 1, sizeof(size_t), f);
+                fwrite(prog_bin, 1, prog_len, f);
+            }
             fclose(f);
             free(prog_bin);
+            prog_bin = nullptr;
         }
     }
 

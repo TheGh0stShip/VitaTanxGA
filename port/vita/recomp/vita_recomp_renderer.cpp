@@ -8,6 +8,7 @@
 #include "ultramodern/renderer_context.hpp"
 #include "vita_fast3d_abi.hpp"
 #include "vita_fast3d_bridge.hpp"
+#include "vita_recomp_diagnostics.hpp"
 #include "vita_recomp_memory.hpp"
 
 namespace {
@@ -86,11 +87,16 @@ public:
         if (!frame_started_) { interpreter_->StartFrame(); frame_started_ = true; }
         const std::uint32_t address = static_cast<std::uint32_t>(task->t.data_ptr);
         void* list = bridge_.BuildDisplayList(address, GBI_2);
+        btga_vita_note_display_list(list != nullptr);
         if (list != nullptr) interpreter_->Run(static_cast<Gfx*>(list), matrices_);
     }
     void send_dummy_workload(std::uint32_t) override {}
     void update_screen() override {
-        if (frame_started_) { interpreter_->EndFrame(); frame_started_ = false; }
+        if (frame_started_) {
+            interpreter_->EndFrame();
+            frame_started_ = false;
+            btga_vita_note_present();
+        }
     }
     void shutdown() override {
         if (frame_started_) update_screen();

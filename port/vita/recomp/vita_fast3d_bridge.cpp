@@ -133,8 +133,10 @@ void Fast3DMemoryBridge::CopyRdramBytes(u8* dst, u32 address, u32 size) const {
     }
 
     for (; offset + 4 <= size; offset += 4) {
-        const u32 value = *(const u32*)(mRdram + address + offset);
-        *(u32*)(dst + offset) = __builtin_bswap32(value);
+        u32 value;
+        memcpy(&value, mRdram + address + offset, sizeof(value));
+        value = __builtin_bswap32(value);
+        memcpy(dst + offset, &value, sizeof(value));
     }
 
     for (; offset < size; ++offset) {
@@ -280,9 +282,10 @@ bool Fast3DMemoryBridge::StageTextureImage(u32 requiredBytes, bool palette, u32 
 }
 
 void* Fast3DMemoryBridge::ConvertMatrix(u32 address) {
+    address = Resolve(address);
+    if (address >= mRdramSize || 64 > mRdramSize - address) return nullptr;
     float* m = (float*)Alloc(64);
     if (!m) return nullptr;
-    address = Resolve(address);
     for (u32 i = 0; i < 4; ++i) {
         for (u32 j = 0; j < 4; j += 2) {
             const u32 idx = i * 2 + j / 2;
@@ -298,9 +301,12 @@ void* Fast3DMemoryBridge::ConvertMatrix(u32 address) {
 }
 
 void* Fast3DMemoryBridge::ConvertVertices(u32 address, u32 count) {
+    address = Resolve(address);
+    const u64 bytes = (u64)count * 16U;
+    if (count == 0 || bytes > 0xFFFFFFFFU || address >= mRdramSize ||
+        bytes > mRdramSize - address) return nullptr;
     HostVtx* out = (HostVtx*)Alloc(sizeof(HostVtx) * count);
     if (!out) return nullptr;
-    address = Resolve(address);
     for (u32 i = 0; i < count; ++i) {
         const u32 a = address + i * 16;
         out[i].x = (float)ReadS16(a + 0);
@@ -319,18 +325,20 @@ void* Fast3DMemoryBridge::ConvertVertices(u32 address, u32 count) {
 }
 
 void* Fast3DMemoryBridge::ConvertViewport(u32 address) {
+    address = Resolve(address);
+    if (address >= mRdramSize || 16 > mRdramSize - address) return nullptr;
     HostViewport* vp = (HostViewport*)Alloc(sizeof(HostViewport));
     if (!vp) return nullptr;
-    address = Resolve(address);
     for (u32 i = 0; i < 4; ++i) vp->scale[i] = ReadS16(address + i * 2);
     for (u32 i = 0; i < 4; ++i) vp->trans[i] = ReadS16(address + 8 + i * 2);
     return vp;
 }
 
 void* Fast3DMemoryBridge::ConvertLight(u32 address, u32 size) {
+    address = Resolve(address);
+    if (size == 0 || address >= mRdramSize || size > mRdramSize - address) return nullptr;
     u8* light = (u8*)Alloc(size);
     if (!light) return nullptr;
-    address = Resolve(address);
     for (u32 i = 0; i < size; ++i) light[i] = ReadU8(address + i);
     return light;
 }

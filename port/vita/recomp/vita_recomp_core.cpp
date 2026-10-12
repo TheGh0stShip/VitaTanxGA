@@ -3,11 +3,13 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <cstdio>
 #include <string>
 
 #include "librecomp/game.hpp"
 #include "recomp.h"
 #include "ultramodern/ultramodern.hpp"
+#include "vita_recomp_diagnostics.hpp"
 
 std::filesystem::path config_path{"ux0:data/VitaTanxGA"};
 std::atomic_bool exited{false};
@@ -33,7 +35,10 @@ extern "C" void cop0_status_write(recomp_context* ctx, gpr value) {
     }
     // BattleTanx only changes FR through the translated path. Treat any
     // other status mutation as a guest invariant violation.
-    if ((changed & ~kStatusFr) != 0U) std::abort();
+    if ((changed & ~kStatusFr) != 0U) {
+        btga_vita_log("guest attempted an unsupported COP0 status change");
+        std::abort();
+    }
     ctx->status_reg = new_status;
 }
 
@@ -41,11 +46,20 @@ extern "C" gpr cop0_status_read(recomp_context* ctx) {
     return static_cast<gpr>(static_cast<std::int32_t>(ctx->status_reg));
 }
 
-extern "C" void switch_error(const char*, std::uint32_t, std::uint32_t) {
+extern "C" void switch_error(const char* function, std::uint32_t vram,
+                             std::uint32_t table) {
+    char message[192];
+    std::snprintf(message, sizeof(message),
+                  "translated switch out of range: %s pc=%08X table=%08X",
+                  function ? function : "unknown", vram, table);
+    btga_vita_log(message);
     std::abort();
 }
 
-extern "C" void do_break(std::uint32_t) {
+extern "C" void do_break(std::uint32_t vram) {
+    char message[96];
+    std::snprintf(message, sizeof(message), "guest BREAK at %08X", vram);
+    btga_vita_log(message);
     std::abort();
 }
 

@@ -33,7 +33,9 @@ The translated game is linked to a Vita-focused subset of N64ModernRuntime:
 
 RDRAM is a bounded 8 MiB Expansion Pak allocation. The runtime loads the retail program at
 its original guest address and initializes the values normally supplied by
-IPL3 before entering the translated cartridge entrypoint.
+IPL3 before entering the translated cartridge entrypoint. The allocation is
+64-byte aligned for ARM cache and NEON access, and renderer conversions reject
+matrix, vertex, viewport, light, command, and texture ranges outside RDRAM.
 
 The original AI frequency is converted into Vita's fixed 48 kHz main-output
 rate. Buffered-frame reports are converted back to the guest rate so the
@@ -57,6 +59,11 @@ DaedalusX64-vitaGL.
 
 Runtime-compiled vitaGL shaders are cached under the title's own
 `ux0:data/VitaTanxGA/shader_cache` directory.
+
+`runtime.log` records durable first-event milestones for VI delivery, accepted
+and rejected display lists, frame presentation, and audio initialization. A
+clean shutdown also records totals, allowing black-screen and early-boot faults
+to be localized without committing private dumps or hardware evidence.
 
 The renderer remains driven by the original game. It does not package a
 hand-selected subset of extracted levels or substitute a separately authored

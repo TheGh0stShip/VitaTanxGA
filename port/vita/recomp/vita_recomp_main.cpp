@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <memory>
 #include <cstring>
+#include <malloc.h>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -20,6 +21,7 @@
 #include "librecomp/game.hpp"
 #include "librecomp/rsp.hpp"
 #include "ultramodern/ultramodern.hpp"
+#include "vita_recomp_diagnostics.hpp"
 #include "vita_recomp_memory.hpp"
 
 extern RspExitReason n_aspMain(std::uint8_t*, std::uint32_t);
@@ -100,15 +102,6 @@ std::array<std::uint8_t, 20> sha1(const std::vector<std::uint8_t>& input) {
         digest[i * 4 + 3] = static_cast<std::uint8_t>(h[i]);
     }
     return digest;
-}
-
-void log_message(const char* message) {
-    std::printf("VitaTanxGA: %s\n", message);
-    FILE* log = std::fopen("ux0:data/VitaTanxGA/runtime.log", "ab");
-    if (log != nullptr) {
-        std::fprintf(log, "%s\n", message);
-        std::fclose(log);
-    }
 }
 
 bool load_rom(std::vector<std::uint8_t>& bytes) {
@@ -263,8 +256,9 @@ void set_audio_frequency(std::uint32_t frequency) {
             sceAudioOutSetConfig(audio_port, kAudioFrames, kVitaAudioRate,
                                  SCE_AUDIO_OUT_MODE_STEREO);
         } else {
-            log_message("48 kHz audio output could not be opened");
+            btga_vita_log("48 kHz audio output could not be opened");
         }
+        if (audio_port >= 0) btga_vita_note_audio_open();
     }
 }
 void queue_audio(std::int16_t* samples, std::size_t sample_count) {
@@ -305,9 +299,9 @@ std::size_t audio_remaining() {
 RspUcodeFunc* get_rsp_microcode(const OSTask* task) {
     return task->t.type == M_AUDTASK ? n_aspMain : nullptr;
 }
-void on_vi() {}
+void on_vi() { btga_vita_note_vi(); }
 void on_gfx_init() {}
-void show_error(const char* message) { log_message(message ? message : "runtime error"); }
+void show_error(const char* message) { btga_vita_log(message); }
 std::string thread_name(const OSThread* thread) {
     return "BTGA-" + std::to_string(thread->id);
 }
@@ -317,19 +311,20 @@ int main() {
     sceIoMkdir("ux0:data/VitaTanxGA", 0777);
     sceIoMkdir("ux0:data/VitaTanxGA/shader_cache", 0777);
     std::remove("ux0:data/VitaTanxGA/runtime.log");
-    log_message("starting translated-game runtime");
+    btga_vita_log("starting translated-game runtime");
     std::vector<std::uint8_t> rom;
     if (!load_rom(rom)) {
-        log_message("baserom.z64 is missing or is not the supported USA Rev 0 ROM");
+        btga_vita_log("baserom.z64 is missing or is not the supported USA Rev 0 ROM");
         return 2;
     }
     if (!patch_screen_edge_scissors(rom)) {
-        log_message("verified ROM did not contain the expected viewport display lists");
+        btga_vita_log("verified ROM did not contain the expected viewport display lists");
         return 2;
     }
     auto rdram = std::unique_ptr<std::uint8_t, decltype(&std::free)>(
-        static_cast<std::uint8_t*>(std::calloc(1, btga::vita::kRdramSize)), &std::free);
-    if (!rdram) { log_message("8 MiB guest memory allocation failed"); return 3; }
+        static_cast<std::uint8_t*>(memalign(64, btga::vita::kRdramSize)), &std::free);
+    if (!rdram) { btga_vita_log("8 MiB guest memory allocation failed"); return 3; }
+    std::memset(rdram.get(), 0, btga::vita::kRdramSize);
     recomp::set_rom_contents(std::move(rom));
     recomp::do_rom_read(rdram.get(),
                         static_cast<gpr>(static_cast<std::int32_t>(0x80071000U)),
@@ -342,9 +337,10 @@ int main() {
     write_guest_word(rdram.get(), 0x80000318U, 8U * 1024U * 1024U);
 
     sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG_WIDE);
+    sceCtrlSetSamplingModeExt(SCE_CTRL_MODE_ANALOG_WIDE);
     if (!vglInitExtended(0, 960, 544, 0x1800000,
                          SCE_GXM_MULTISAMPLE_NONE)) {
-        log_message("vitaGL initialization failed");
+        btga_vita_log("vitaGL initialization failed");
         return 4;
     }
     const recomp::rsp::callbacks_t rsp_select{get_rsp_microcode};
@@ -370,6 +366,7 @@ int main() {
     recomp_context context{};
     context.f_odd = &context.f0.u32h;
     recomp_entrypoint(rdram.get(), &context);
+    btga_vita_log("translated cartridge entrypoint returned to Vita host loop");
     while (!exited.load()) ultramodern::sleep_milliseconds(10);
 
     graphics_shutdown_ready.signal();
@@ -386,6 +383,7 @@ int main() {
         if (audio_port >= 0) sceAudioOutReleasePort(audio_port);
         audio_port = -1;
     }
-    log_message("runtime stopped cleanly");
+    btga_vita_log_runtime_summary();
+    btga_vita_log("runtime stopped cleanly");
     return 0;
 }
