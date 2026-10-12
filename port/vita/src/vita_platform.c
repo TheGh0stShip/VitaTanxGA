@@ -68,6 +68,7 @@ typedef struct CachedTexture {
     uint32_t state_size;
     BtgaTextureInfo info;
     vita2d_texture *texture;
+    bool transparent;
 } CachedTexture;
 
 static SceGxmTextureAddrMode texture_address_mode(uint8_t mode) {
@@ -86,6 +87,7 @@ typedef struct ProjectedTriangle {
     uint32_t color;
     float depth;
     bool actor;
+    bool transparent;
 } ProjectedTriangle;
 
 typedef struct DrawSceneContext {
@@ -131,6 +133,7 @@ static bool cache_texture(uint32_t texture_offset, uint32_t texture_size,
     uint8_t *destination;
     unsigned int stride;
     unsigned int row;
+    size_t pixel_index;
     size_t pixel_count;
     if (texture_offset == UINT32_MAX ||
         find_cached_texture(texture_offset, texture_size, state_offset, state_size) != NULL)
@@ -151,6 +154,13 @@ static bool cache_texture(uint32_t texture_offset, uint32_t texture_size,
                                   &cached->info, pixels, pixel_count)) {
         free(pixels);
         return false;
+    }
+    cached->transparent = false;
+    for (pixel_index = 0; pixel_index < pixel_count; pixel_index++) {
+        if ((pixels[pixel_index] >> 24) != 255u) {
+            cached->transparent = true;
+            break;
+        }
     }
     cached->texture = vita2d_create_empty_texture(cached->info.width, cached->info.height);
     if (cached->texture == NULL) {
@@ -502,6 +512,8 @@ static bool draw_world_triangle(const BtgaPlacedTriangle *triangle, void *contex
     }
     output->texture = draw->texture;
     output->color = RGBA8(red, green, blue, draw->material.alpha);
+    output->transparent = draw->material.alpha != 255 ||
+                          (draw->texture != NULL && draw->texture->transparent);
     for (index = 0; index < 3; index++) {
         float normalized_depth = projected[index].depth / 20000.0f;
         if (normalized_depth < 0.0f) normalized_depth = 0.0f;
@@ -530,6 +542,7 @@ static bool draw_world_triangle(const BtgaPlacedTriangle *triangle, void *contex
 static int compare_triangle_depth(const void *left, const void *right) {
     const ProjectedTriangle *a = left;
     const ProjectedTriangle *b = right;
+    if (a->transparent != b->transparent) return a->transparent ? 1 : -1;
     /* Keep the vehicle above intersecting coarse terrain triangles until the
      * port replaces this immediate renderer with a GXM depth buffer. */
     if (a->actor != b->actor) return a->actor ? 1 : -1;
@@ -614,12 +627,14 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
     while (triangle_index < draw.count) {
         const CachedTexture *texture = s_projected_triangles[triangle_index].texture;
         uint32_t color = s_projected_triangles[triangle_index].color;
+        bool transparent = s_projected_triangles[triangle_index].transparent;
         uint32_t group_start = triangle_index;
         uint32_t group_count;
         uint32_t output_index = 0;
         while (triangle_index < draw.count &&
                s_projected_triangles[triangle_index].texture == texture &&
-               s_projected_triangles[triangle_index].color == color) {
+               s_projected_triangles[triangle_index].color == color &&
+               s_projected_triangles[triangle_index].transparent == transparent) {
             unsigned int vertex_index;
             for (vertex_index = 0; vertex_index < 3; vertex_index++) {
                 s_draw_vertices[output_index] =
@@ -631,6 +646,12 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
             triangle_index++;
         }
         group_count = triangle_index - group_start;
+        sceGxmSetFrontDepthWriteEnable(
+            vita2d_get_context(), transparent ? SCE_GXM_DEPTH_WRITE_DISABLED :
+                                                SCE_GXM_DEPTH_WRITE_ENABLED);
+        sceGxmSetBackDepthWriteEnable(
+            vita2d_get_context(), transparent ? SCE_GXM_DEPTH_WRITE_DISABLED :
+                                                SCE_GXM_DEPTH_WRITE_ENABLED);
         if (texture != NULL)
             vita2d_draw_array_textured(texture->texture, SCE_GXM_PRIMITIVE_TRIANGLES,
                                        s_texture_vertices, group_count * 3, color);
