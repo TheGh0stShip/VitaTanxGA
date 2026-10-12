@@ -52,7 +52,12 @@ typedef struct BtgaPlayer {
     uint16_t ammo;
     uint16_t max_health;
     uint16_t max_ammo;
+    uint16_t shield;
+    uint16_t tank_bucks;
     uint8_t fire_cooldown;
+    uint8_t secondary_cooldown;
+    uint8_t selected_weapon;
+    bool radar;
 } BtgaPlayer;
 
 typedef struct BtgaProjectile {
@@ -62,8 +67,10 @@ typedef struct BtgaProjectile {
     float velocity_x;
     float velocity_z;
     uint16_t lifetime;
+    uint16_t damage;
     uint8_t owner;
     uint8_t team;
+    uint8_t weapon;
     bool active;
 } BtgaProjectile;
 
@@ -94,6 +101,7 @@ enum {
     BTGA_MAX_ENEMIES = 20,
     BTGA_MAX_PICKUPS = 64,
     BTGA_PICKUP_KIND_COUNT = 20,
+    BTGA_WEAPON_COUNT = 18,
 };
 
 typedef struct BtgaRuntime {
@@ -105,7 +113,7 @@ typedef struct BtgaRuntime {
     BtgaProjectile projectiles[BTGA_MAX_PROJECTILES];
     BtgaEnemy enemies[BTGA_MAX_ENEMIES];
     BtgaPickup pickups[BTGA_MAX_PICKUPS];
-    uint16_t pickup_inventory[BTGA_PICKUP_KIND_COUNT];
+    uint16_t weapon_ammo[BTGA_WEAPON_COUNT];
     uint8_t pickup_count;
     uint8_t last_pickup_kind;
     uint16_t pickup_message_ticks;
@@ -155,6 +163,10 @@ uint32_t btga_runtime_active_enemies(const BtgaRuntime *runtime);
 uint32_t btga_runtime_active_allies(const BtgaRuntime *runtime);
 uint32_t btga_runtime_active_pickups(const BtgaRuntime *runtime);
 const char *btga_runtime_pickup_name(uint8_t kind);
+const char *btga_runtime_weapon_name(uint8_t weapon);
+uint8_t btga_runtime_pickup_weapon(uint8_t pickup_kind);
+uint16_t btga_runtime_pickup_weapon_amount(uint8_t pickup_kind);
+uint8_t btga_runtime_weapon_cooldown(uint8_t weapon);
 void btga_runtime_restart_mission(BtgaRuntime *runtime);
 
 #endif

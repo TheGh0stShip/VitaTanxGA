@@ -77,6 +77,8 @@ set(VITA_GAME_FILES
   "${VITA_ASSET_ROOT}/world-pools/texture.bin"
   "${VITA_ASSET_ROOT}/gameplay/gameplay.bin"
   "${VITA_ASSET_ROOT}/gameplay/projectile_0.i8"
+  "${VITA_ASSET_ROOT}/gameplay/projectile_1.i8"
+  "${VITA_ASSET_ROOT}/gameplay/projectile_2.i8"
   "${VITA_ASSET_ROOT}/campaign/campaign_text.bin"
   "${VITA_ASSET_ROOT}/campaign/campaign_config.bin"
   "${VITA_ASSET_ROOT}/scripts/script_00_514720/header.bin"

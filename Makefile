@@ -46,7 +46,9 @@ runtime-asset-test: vita-assets
 		$(VITA_ASSETS)/worlds/common_world \
 		$(VITA_ASSETS)/worlds/level_world_131 \
 		$(VITA_ASSETS)/gameplay/gameplay.bin \
-		$(VITA_ASSETS)/gameplay/projectile_0.i8
+		$(VITA_ASSETS)/gameplay/projectile_0.i8 \
+		$(VITA_ASSETS)/gameplay/projectile_1.i8 \
+		$(VITA_ASSETS)/gameplay/projectile_2.i8
 
 runtime-script-asset-test: vita-assets
 	$(CC) -std=c11 -Wall -Wextra -Werror -Wpedantic \

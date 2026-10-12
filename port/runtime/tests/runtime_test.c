@@ -12,8 +12,28 @@ int btga_script_tests(void);
 int btga_campaign_tests(void);
 
 int main(void) {
+    static const uint8_t pickup_weapons[BTGA_PICKUP_KIND_COUNT] = {
+        0, 2, 3, 4, 16, 7, 6, 0, 0, 8,
+        9, 0, 10, 0, 15, 12, 13, 14, 0, 0,
+    };
+    static const uint16_t pickup_amounts[BTGA_PICKUP_KIND_COUNT] = {
+        0, 5, 5, 5, 2, 1, 20, 0, 0, 5,
+        5, 0, 5, 0, 20, 100, 2, 5, 0, 0,
+    };
     BtgaRuntime runtime;
     BtgaInput input = {0};
+    unsigned int index;
+
+    for (index = 0; index < BTGA_PICKUP_KIND_COUNT; index++) {
+        assert(btga_runtime_pickup_weapon((uint8_t)index) ==
+               pickup_weapons[index]);
+        assert(btga_runtime_pickup_weapon_amount((uint8_t)index) ==
+               pickup_amounts[index]);
+    }
+    assert(btga_runtime_pickup_weapon(BTGA_PICKUP_KIND_COUNT) == 0);
+    assert(btga_runtime_weapon_cooldown(2) == 30);
+    assert(btga_runtime_weapon_cooldown(4) == 90);
+    assert(btga_runtime_weapon_cooldown(12) == 2);
 
     btga_runtime_init(&runtime, true);
     assert(runtime.running);
@@ -32,6 +52,7 @@ int main(void) {
     assert(btga_runtime_add_pickup(&runtime, 0.0f, 0.0f, 576.0f, 7));
     assert(btga_runtime_add_pickup(&runtime, 0.0f, 0.0f, 576.0f, 1));
     assert(btga_runtime_add_pickup(&runtime, 0.0f, 0.0f, 576.0f, 11));
+    assert(btga_runtime_add_pickup(&runtime, 0.0f, 0.0f, 576.0f, 4));
     runtime.enemies[0].x = 50.0f;
     runtime.enemies[0].health = 25;
 
@@ -63,14 +84,25 @@ int main(void) {
     assert(runtime.player.velocity > 0.0f);
     assert(runtime.player.ammo == 100);
     assert(runtime.player.health == 80);
-    assert(runtime.pickup_inventory[1] == 5);
+    assert(runtime.weapon_ammo[2] == 5);
+    assert(runtime.weapon_ammo[16] == 2);
+    assert(runtime.player.selected_weapon == 2);
     assert(btga_runtime_active_pickups(&runtime) == 0);
-    assert(runtime.last_pickup_kind == 11 && runtime.pickup_message_ticks != 0);
+    assert(runtime.last_pickup_kind == 4 && runtime.pickup_message_ticks != 0);
     assert(runtime.projectiles[0].active);
     input.pressed = 0;
     btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US * 4);
     btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US * 4);
     assert(runtime.player.ammo == 99);
+
+    input = (BtgaInput){.held = BTGA_BUTTON_ALT_FIRE,
+                        .pressed = BTGA_BUTTON_ALT_FIRE};
+    btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US);
+    assert(runtime.weapon_ammo[2] == 4);
+    assert(runtime.player.secondary_cooldown != 0);
+    input = (BtgaInput){.pressed = BTGA_BUTTON_SELECT};
+    btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US);
+    assert(runtime.player.selected_weapon == 16);
 
     input = (BtgaInput){.pressed = BTGA_BUTTON_START};
     btga_runtime_update(&runtime, &input, 0);
@@ -80,9 +112,7 @@ int main(void) {
     btga_runtime_update(&runtime, &input, 0);
     assert(runtime.screen == BTGA_SCREEN_TITLE);
 
-    input.pressed = BTGA_BUTTON_SELECT;
-    btga_runtime_update(&runtime, &input, 0);
-    assert(!runtime.running);
+    assert(runtime.running);
     btga_world_tests();
     btga_geometry_tests();
     btga_view_tests();

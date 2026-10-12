@@ -14,29 +14,85 @@ static float clampf(float value, float minimum, float maximum) {
     return value;
 }
 
-static void spawn_projectile(BtgaRuntime *runtime, float x, float y, float z,
-                             float heading, uint8_t owner, uint8_t team) {
+static bool spawn_projectile(BtgaRuntime *runtime, float x, float y, float z,
+                             float heading, uint8_t owner, uint8_t team,
+                             uint8_t weapon, uint16_t damage, float speed) {
     unsigned int index;
-    if (owner == 0 &&
-        (runtime->player.ammo == 0 || runtime->player.fire_cooldown != 0)) return;
     for (index = 0; index < BTGA_MAX_PROJECTILES; index++) {
         BtgaProjectile *projectile = &runtime->projectiles[index];
         if (projectile->active) continue;
         projectile->x = x + sinf(heading) * 55.0f;
         projectile->y = y + 35.0f;
         projectile->z = z + cosf(heading) * 55.0f;
-        projectile->velocity_x = sinf(heading) * 95.0f;
-        projectile->velocity_z = cosf(heading) * 95.0f;
+        projectile->velocity_x = sinf(heading) * speed;
+        projectile->velocity_z = cosf(heading) * speed;
         projectile->lifetime = 75;
+        projectile->damage = damage;
         projectile->owner = owner;
         projectile->team = team;
+        projectile->weapon = weapon;
         projectile->active = true;
-        if (owner == 0) {
-            runtime->player.ammo--;
-            runtime->player.fire_cooldown = 8;
-        }
-        return;
+        return true;
     }
+    return false;
+}
+
+uint8_t btga_runtime_pickup_weapon(uint8_t kind) {
+    static const uint8_t weapons[BTGA_PICKUP_KIND_COUNT] = {
+        0, 2, 3, 4, 16, 7, 6, 0, 0, 8,
+        9, 0, 10, 0, 15, 12, 13, 14, 0, 0,
+    };
+    return kind < BTGA_PICKUP_KIND_COUNT ? weapons[kind] : 0;
+}
+
+uint16_t btga_runtime_pickup_weapon_amount(uint8_t kind) {
+    static const uint16_t amounts[BTGA_PICKUP_KIND_COUNT] = {
+        0, 5, 5, 5, 2, 1, 20, 0, 0, 5,
+        5, 0, 5, 0, 20, 100, 2, 5, 0, 0,
+    };
+    return kind < BTGA_PICKUP_KIND_COUNT ? amounts[kind] : 0;
+}
+
+uint8_t btga_runtime_weapon_cooldown(uint8_t weapon) {
+    /* D_801146D4: retail mode lifetimes used by func_8008E620. */
+    static const uint8_t cooldowns[BTGA_WEAPON_COUNT] = {
+        0, 0, 30, 30, 90, 30, 10, 30, 30,
+        30, 30, 30, 2, 30, 30, 10, 30, 30,
+    };
+    return weapon < BTGA_WEAPON_COUNT ? cooldowns[weapon] : 0;
+}
+
+static void cycle_weapon(BtgaRuntime *runtime) {
+    uint8_t weapon = runtime->player.selected_weapon;
+    uint8_t checked;
+    for (checked = 0; checked < BTGA_WEAPON_COUNT - 2; checked++) {
+        weapon = weapon < 2 || weapon + 1 >= BTGA_WEAPON_COUNT
+            ? 2 : (uint8_t)(weapon + 1);
+        if (runtime->weapon_ammo[weapon] != 0) {
+            runtime->player.selected_weapon = weapon;
+            return;
+        }
+    }
+    runtime->player.selected_weapon = 0;
+}
+
+static void fire_secondary(BtgaRuntime *runtime) {
+    uint8_t weapon = runtime->player.selected_weapon;
+    float speed = 80.0f;
+    uint16_t damage = 30;
+    if (weapon < 2 || weapon >= BTGA_WEAPON_COUNT ||
+        runtime->weapon_ammo[weapon] == 0 ||
+        runtime->player.secondary_cooldown != 0) return;
+    if (weapon == 4) { speed = 25.0f; damage = 70; }
+    else if (weapon == 7) { speed = 45.0f; damage = 100; }
+    else if (weapon == 9) { speed = 100.0f; damage = 15; }
+    if (!spawn_projectile(runtime, runtime->player.x, runtime->player.y,
+                          runtime->player.z,
+                          runtime->player.yaw + runtime->player.turret_yaw,
+                          0, 0, weapon, damage, speed)) return;
+    runtime->weapon_ammo[weapon]--;
+    runtime->player.secondary_cooldown = btga_runtime_weapon_cooldown(weapon);
+    if (runtime->weapon_ammo[weapon] == 0) cycle_weapon(runtime);
 }
 
 static float angle_delta(float target, float current) {
@@ -119,11 +175,11 @@ static void update_enemies(BtgaRuntime *runtime) {
             fabsf(angle_delta(target_yaw,
                               enemy->yaw + enemy->turret_yaw)) < 0.12f &&
             enemy->fire_cooldown == 0) {
-            spawn_projectile(runtime, enemy->x, enemy->y, enemy->z,
-                             enemy->yaw + enemy->turret_yaw,
-                             (uint8_t)(index + 1),
-                             enemy->allied ? 0 : 1);
-            enemy->fire_cooldown = 45;
+            if (spawn_projectile(runtime, enemy->x, enemy->y, enemy->z,
+                                 enemy->yaw + enemy->turret_yaw,
+                                 (uint8_t)(index + 1),
+                                 enemy->allied ? 0 : 1, 1, 30, 95.0f))
+                enemy->fire_cooldown = 45;
         }
     }
 }
@@ -153,10 +209,21 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
                                 &terrain_height)) runtime->player.y = terrain_height;
     }
     if (runtime->player.fire_cooldown != 0) runtime->player.fire_cooldown--;
-    if (((input->held | pressed) & BTGA_BUTTON_FIRE) != 0)
-        spawn_projectile(runtime, runtime->player.x, runtime->player.y,
-                         runtime->player.z,
-                         runtime->player.yaw + runtime->player.turret_yaw, 0, 0);
+    if (runtime->player.secondary_cooldown != 0)
+        runtime->player.secondary_cooldown--;
+    if ((pressed & BTGA_BUTTON_SELECT) != 0) cycle_weapon(runtime);
+    if (((input->held | pressed) & BTGA_BUTTON_FIRE) != 0 &&
+        runtime->player.ammo != 0 && runtime->player.fire_cooldown == 0) {
+        if (spawn_projectile(runtime, runtime->player.x, runtime->player.y,
+                             runtime->player.z,
+                             runtime->player.yaw + runtime->player.turret_yaw,
+                             0, 0, 1, 30, 95.0f)) {
+            runtime->player.ammo--;
+            runtime->player.fire_cooldown = 8;
+        }
+    }
+    if (((input->held | pressed) & BTGA_BUTTON_ALT_FIRE) != 0)
+        fire_secondary(runtime);
     update_enemies(runtime);
     for (index = 0; index < runtime->pickup_count; index++) {
         BtgaPickup *pickup = &runtime->pickups[index];
@@ -166,19 +233,22 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
         pickup->active = false;
         runtime->last_pickup_kind = pickup->kind;
         runtime->pickup_message_ticks = 90;
+        {
+            uint8_t weapon = btga_runtime_pickup_weapon(pickup->kind);
+            uint16_t amount = btga_runtime_pickup_weapon_amount(pickup->kind);
+            if (weapon != 0) {
+                runtime->weapon_ammo[weapon] += amount;
+                if (runtime->player.selected_weapon == 0)
+                    runtime->player.selected_weapon = weapon;
+            }
+        }
         switch (pickup->kind) {
-            case 1: case 2: case 3: case 9: case 10: case 17:
-                runtime->pickup_inventory[pickup->kind] += 5;
-                break;
-            case 4: runtime->pickup_inventory[4] += 2; break;
-            case 5: runtime->pickup_inventory[5] += 1; break;
-            case 6: case 14: runtime->pickup_inventory[pickup->kind] += 20; break;
             case 7:
                 if (runtime->player.health < runtime->player.max_health) {
                     uint16_t health = (uint16_t)(runtime->player.health + 30);
                     runtime->player.health = health > runtime->player.max_health
                         ? runtime->player.max_health : health;
-                } else runtime->pickup_inventory[11]++;
+                } else runtime->weapon_ammo[11]++;
                 break;
             case 8:
                 runtime->player.ammo = runtime->player.ammo + 16u > runtime->player.max_ammo
@@ -192,12 +262,9 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
                     ? runtime->player.max_ammo
                     : (uint16_t)(runtime->player.ammo + runtime->player.max_ammo / 3u);
                 break;
-            case 12: runtime->pickup_inventory[12] += 5; break;
-            case 13: runtime->pickup_inventory[13] = 100; break;
-            case 15: runtime->pickup_inventory[15] += 100; break;
-            case 16: runtime->pickup_inventory[16] += 2; break;
-            case 18: runtime->pickup_inventory[18] += 5; break;
-            case 19: runtime->pickup_inventory[19] = 1; break;
+            case 13: runtime->player.shield = 100; break;
+            case 18: runtime->player.tank_bucks += 5; break;
+            case 19: runtime->player.radar = true; break;
             default: break;
         }
     }
@@ -214,7 +281,8 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
                 float dz = projectile->z - enemy->z;
                 if (enemy->active && !enemy->allied &&
                     dx * dx + dz * dz < 2500.0f) {
-                    enemy->health = enemy->health > 25 ? enemy->health - 25 : 0;
+                    enemy->health = enemy->health > projectile->damage
+                        ? enemy->health - projectile->damage : 0;
                     if (enemy->health == 0) enemy->active = false;
                     projectile->active = false;
                     break;
@@ -224,8 +292,15 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
             float dx = projectile->x - runtime->player.x;
             float dz = projectile->z - runtime->player.z;
             if (dx * dx + dz * dz < 2500.0f) {
-                runtime->player.health = runtime->player.health > 10
-                    ? runtime->player.health - 10 : 0;
+                uint16_t damage = projectile->damage;
+                if (runtime->player.shield != 0) {
+                    uint16_t absorbed = damage < runtime->player.shield
+                        ? damage : runtime->player.shield;
+                    runtime->player.shield -= absorbed;
+                    damage -= absorbed;
+                }
+                runtime->player.health = runtime->player.health > damage
+                    ? runtime->player.health - damage : 0;
                 projectile->active = false;
             }
             if (projectile->active) {
@@ -236,7 +311,8 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
                     dz = projectile->z - ally->z;
                     if (ally->active && ally->allied &&
                         dx * dx + dz * dz < 2500.0f) {
-                        ally->health = ally->health > 10 ? ally->health - 10 : 0;
+                        ally->health = ally->health > projectile->damage
+                            ? ally->health - projectile->damage : 0;
                         if (ally->health == 0) ally->active = false;
                         projectile->active = false;
                         break;
@@ -297,6 +373,16 @@ const char *btga_runtime_pickup_name(uint8_t kind) {
         "CLOAKING", "GRENADES", "TANK BUCKS", "RADAR",
     };
     return kind < BTGA_PICKUP_KIND_COUNT ? names[kind] : "POWERUP";
+}
+
+const char *btga_runtime_weapon_name(uint8_t weapon) {
+    static const char *const names[BTGA_WEAPON_COUNT] = {
+        "NONE", "CANNON", "SWARMERS", "LASERS", "GUIDED MISSILES",
+        "POWERUP", "MINES", "NUKE", "TELEPORTERS", "PLASMA BOLTS",
+        "TURBO", "HEALTH", "FLAMETHROWER", "CLOAKING", "GRENADES",
+        "BOUNCING BETTIES", "GUN BUDDIES", "POWERUP",
+    };
+    return weapon < BTGA_WEAPON_COUNT ? names[weapon] : "NONE";
 }
 
 bool btga_runtime_add_pickup(BtgaRuntime *runtime, float x, float y, float z,
@@ -367,13 +453,18 @@ void btga_runtime_restart_mission(BtgaRuntime *runtime) {
     runtime->player.velocity = 0.0f;
     runtime->player.health = runtime->player.max_health;
     runtime->player.ammo = runtime->player.max_ammo;
+    runtime->player.shield = 0;
+    runtime->player.tank_bucks = 0;
     runtime->player.fire_cooldown = 0;
+    runtime->player.secondary_cooldown = 0;
+    runtime->player.selected_weapon = 0;
+    runtime->player.radar = false;
     for (index = 0; index < BTGA_MAX_PROJECTILES; index++)
         runtime->projectiles[index].active = false;
     for (index = 0; index < runtime->pickup_count; index++)
         runtime->pickups[index].active = true;
-    for (index = 0; index < BTGA_PICKUP_KIND_COUNT; index++)
-        runtime->pickup_inventory[index] = 0;
+    for (index = 0; index < BTGA_WEAPON_COUNT; index++)
+        runtime->weapon_ammo[index] = 0;
     runtime->pickup_message_ticks = 0;
     for (index = 0; index < BTGA_MAX_ENEMIES; index++) {
         BtgaEnemy *enemy = &runtime->enemies[index];
@@ -477,10 +568,6 @@ void btga_runtime_update(BtgaRuntime *runtime, const BtgaInput *input,
     }
 
     runtime->pending_pressed |= input->pressed;
-    if ((input->pressed & BTGA_BUTTON_SELECT) != 0) {
-        runtime->running = false;
-        return;
-    }
     if (runtime->screen == BTGA_SCREEN_TITLE &&
         (input->pressed & BTGA_BUTTON_CONFIRM) != 0 && runtime->assets_ready) {
         btga_runtime_restart_mission(runtime);

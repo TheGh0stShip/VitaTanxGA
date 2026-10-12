@@ -46,7 +46,8 @@ uploads native Vita textures; applies recovered material and distance
 modulation; and separates alpha surfaces from opaque depth writes. The full
 6,303-triangle placed scene is rendered with a 37-degree perspective camera
 and GXM depth testing. Portable gameplay state currently covers tank movement,
-terrain following, turret aim, projectiles, ammunition, the recovered
+terrain following, turret aim, primary and selected secondary fire, retail
+weapon-slot inventory and cooldowns, shields, projectiles, ammunition, the recovered
 three-hostile first-mission roster, pursuit and firing, damage, enemy-only
 victory evaluation, repeatable mission resets, and title/gameplay/pause
 transitions. Live projectiles use the retail 32x32 I8 sprite copied by the

@@ -112,7 +112,7 @@ static vita2d_color_vertex s_draw_vertices[kMaximumProjectedTriangles * 3];
 static vita2d_texture_vertex s_texture_vertices[kMaximumProjectedTriangles * 3];
 static CachedTexture s_texture_cache[kMaximumTextureCache];
 static uint32_t s_texture_cache_count;
-static CachedTexture s_projectile_texture;
+static CachedTexture s_projectile_textures[3];
 
 static const CachedTexture *find_cached_texture(uint32_t texture_offset,
                                                 uint32_t texture_size,
@@ -263,35 +263,41 @@ static bool load_file(const char *path, LoadedFile *loaded) {
     return true;
 }
 
-static bool load_projectile_texture(void) {
-    LoadedFile image = {0};
+static bool load_projectile_textures(void) {
     BtgaTextureInfo info = {
         .image_offset = 0, .width = 32, .height = 32,
         .format_id = 4, .size_id = 1,
     };
-    uint32_t pixels[32 * 32];
-    uint8_t *destination;
-    unsigned int stride;
-    unsigned int row;
-    if (!load_file("app0:assets/gameplay/projectile_0.i8", &image) ||
-        image.size != 32u * 32u ||
-        !btga_texture_decode_rgba(image.data, image.size, &info, pixels,
-                                  32u * 32u)) {
+    unsigned int index;
+    for (index = 0; index < 3; index++) {
+        LoadedFile image = {0};
+        CachedTexture *cached = &s_projectile_textures[index];
+        uint32_t pixels[32 * 32];
+        uint8_t *destination;
+        unsigned int stride;
+        unsigned int row;
+        char path[48];
+        snprintf(path, sizeof(path), "app0:assets/gameplay/projectile_%u.i8",
+                 index);
+        if (!load_file(path, &image) || image.size != 32u * 32u ||
+            !btga_texture_decode_rgba(image.data, image.size, &info, pixels,
+                                      32u * 32u)) {
+            free(image.data);
+            return false;
+        }
         free(image.data);
-        return false;
+        *cached = (CachedTexture){.info = info, .transparent = true};
+        cached->texture = vita2d_create_empty_texture(32, 32);
+        if (cached->texture == NULL) return false;
+        destination = vita2d_texture_get_datap(cached->texture);
+        stride = vita2d_texture_get_stride(cached->texture);
+        for (row = 0; row < 32; row++)
+            memcpy(destination + row * stride, pixels + row * 32,
+                   32u * sizeof(*pixels));
+        vita2d_texture_set_filters(cached->texture,
+                                   SCE_GXM_TEXTURE_FILTER_LINEAR,
+                                   SCE_GXM_TEXTURE_FILTER_LINEAR);
     }
-    free(image.data);
-    s_projectile_texture = (CachedTexture){.info = info, .transparent = true};
-    s_projectile_texture.texture = vita2d_create_empty_texture(32, 32);
-    if (s_projectile_texture.texture == NULL) return false;
-    destination = vita2d_texture_get_datap(s_projectile_texture.texture);
-    stride = vita2d_texture_get_stride(s_projectile_texture.texture);
-    for (row = 0; row < 32; row++)
-        memcpy(destination + row * stride, pixels + row * 32,
-               32u * sizeof(*pixels));
-    vita2d_texture_set_filters(s_projectile_texture.texture,
-                               SCE_GXM_TEXTURE_FILTER_LINEAR,
-                               SCE_GXM_TEXTURE_FILTER_LINEAR);
     return true;
 }
 
@@ -425,7 +431,7 @@ static bool load_first_world(void) {
                 btga_terrain_build(&s_world_components, s_geometry_pool.data,
                                    s_geometry_pool.size, &bounds, &s_terrain) &&
                 build_texture_cache() &&
-                load_projectile_texture() &&
+                load_projectile_textures() &&
                 btga_tank_definition(s_gameplay_data.data, s_gameplay_data.size,
                                      0, &s_player_tank) &&
                 btga_campaign_mission_config(s_campaign_config_file.data,
@@ -472,9 +478,10 @@ cleanup:
     for (index = 0; index < s_texture_cache_count; index++)
         vita2d_free_texture(s_texture_cache[index].texture);
     s_texture_cache_count = 0;
-    if (s_projectile_texture.texture != NULL) {
-        vita2d_free_texture(s_projectile_texture.texture);
-        s_projectile_texture = (CachedTexture){0};
+    for (index = 0; index < 3; index++) {
+        if (s_projectile_textures[index].texture != NULL)
+            vita2d_free_texture(s_projectile_textures[index].texture);
+        s_projectile_textures[index] = (CachedTexture){0};
     }
     for (index = 0; index < 7; index++) {
         free(s_world_files[index].data);
@@ -664,7 +671,12 @@ static void queue_projectile_billboard(DrawSceneContext *draw,
     float half_height;
     float normalized_depth;
     unsigned int triangle;
-    if (s_projectile_texture.texture == NULL ||
+    unsigned int texture_index = projectile->weapon == 1 ? 0u :
+                                 projectile->weapon == 3 || projectile->weapon == 9
+                                     ? 1u : 2u;
+    const CachedTexture *projectile_texture =
+        &s_projectile_textures[texture_index];
+    if (projectile_texture->texture == NULL ||
         !btga_project(&draw->projector, world, &center)) return;
     x = (center.x + 1.0f) * 480.0f;
     y = (1.0f - center.y) * 272.0f;
@@ -677,7 +689,7 @@ static void queue_projectile_billboard(DrawSceneContext *draw,
         ProjectedTriangle *output = &s_projected_triangles[draw->count++];
         unsigned int vertex;
         *output = (ProjectedTriangle){
-            .texture = &s_projectile_texture,
+            .texture = projectile_texture,
             .color = 0xFFFFFFFFu,
             .depth = center.depth,
             .actor = true,
@@ -1020,7 +1032,7 @@ void vita_platform_draw(const BtgaRuntime *runtime) {
         vita2d_pgf_draw_text(s_font, 90, 211, kColorOrange, 0.95f,
                              "BattleTanx: Global Assault");
         vita2d_pgf_draw_text(s_font, 90, 300, kColorGray, 0.78f,
-                             "CROSS: start   SELECT: exit");
+                             "CROSS: start");
         if (world != NULL) {
             vita2d_pgf_draw_textf(s_font, 90, 350, kColorGray, 0.66f,
                                   "Loaded: %lu placements, %lu models",
@@ -1054,15 +1066,20 @@ void vita_platform_draw(const BtgaRuntime *runtime) {
     } else if (runtime->screen == BTGA_SCREEN_GAMEPLAY ||
                runtime->screen == BTGA_SCREEN_PAUSED) {
         vita2d_pgf_draw_textf(s_font, 18, 30, kColorWhite, 0.64f,
-                              "ARMOR %u  AMMO %u  ALLY %lu  ENEMY %lu  PICKUP %lu",
-                              runtime->player.health, runtime->player.ammo,
-                              (unsigned long)btga_runtime_active_allies(runtime),
+                              "ARMOR %u  SHIELD %u  AMMO %u  ENEMY %lu  PICKUP %lu",
+                              runtime->player.health, runtime->player.shield,
+                              runtime->player.ammo,
                               (unsigned long)btga_runtime_active_enemies(runtime),
                               (unsigned long)btga_runtime_active_pickups(runtime));
         vita2d_pgf_draw_text(s_font, 18, 52, kColorGray, 0.55f,
-                             "LEFT: drive  RIGHT: turret  R: fire  START: pause");
+                             "LEFT: drive  RIGHT: turret  R/L: fire  SELECT: weapon");
         vita2d_pgf_draw_textf(s_font, 18, 78, kColorOrange, 0.55f,
                               "OBJECTIVE: %s", s_mission_text.objective.text);
+        if (runtime->player.selected_weapon != 0)
+            vita2d_pgf_draw_textf(
+                s_font, 18, 100, kColorWhite, 0.52f, "%s x%u",
+                btga_runtime_weapon_name(runtime->player.selected_weapon),
+                runtime->weapon_ammo[runtime->player.selected_weapon]);
         if (runtime->pickup_message_ticks != 0)
             vita2d_pgf_draw_textf(s_font, 330, 500, kColorOrange, 0.72f,
                                   "PICKED UP %s",
@@ -1108,9 +1125,10 @@ void vita_platform_shutdown(void) {
     for (index = 0; index < s_texture_cache_count; index++)
         vita2d_free_texture(s_texture_cache[index].texture);
     s_texture_cache_count = 0;
-    if (s_projectile_texture.texture != NULL) {
-        vita2d_free_texture(s_projectile_texture.texture);
-        s_projectile_texture = (CachedTexture){0};
+    for (index = 0; index < 3; index++) {
+        if (s_projectile_textures[index].texture != NULL)
+            vita2d_free_texture(s_projectile_textures[index].texture);
+        s_projectile_textures[index] = (CachedTexture){0};
     }
     free(s_texture_pool.data);
     s_texture_pool = (LoadedFile){0};

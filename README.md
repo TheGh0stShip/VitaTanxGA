@@ -20,7 +20,8 @@ The repository currently produces an installable PS Vita VPK that:
 - provides title, gameplay, and pause states with controllable tank movement,
   turret aiming, cooldown-limited held-trigger firing, ammunition, projectiles
   rendered with the recovered
-  transparent N64 intensity sprite, and a following camera;
+  transparent N64 intensity sprite, retail pickup-to-weapon inventory mapping,
+  secondary fire, weapon cycling, shields, and a following camera;
 - resolves and renders the player's original tank asset through the recovered
   shared model-ID table, including body, turret, treads, and detail layers;
 - loads the campaign dispatcher-selected SF Airport world/actor pair rather
