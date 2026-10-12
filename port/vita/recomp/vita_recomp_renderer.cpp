@@ -90,7 +90,11 @@ public:
                        const ultramodern::renderer::GraphicsConfig&) override { return true; }
     void enable_instant_present() override {}
     void send_dl(const OSTask* task) override {
-        if (!frame_started_) { interpreter_->StartFrame(); frame_started_ = true; }
+        if (!frame_started_) {
+            bridge_.BeginFrame();
+            interpreter_->StartFrame();
+            frame_started_ = true;
+        }
         const std::uint32_t address = static_cast<std::uint32_t>(task->t.data_ptr);
         void* list = bridge_.BuildDisplayList(address, GBI_2);
         btga_vita_note_display_list(list != nullptr);

@@ -51,6 +51,17 @@ void Fast3DMemoryBridge::Reset() {
     for (u32 i = 0; i < mArenaChunkCount; ++i) mArenaChunks[i].used = 0;
 }
 
+void Fast3DMemoryBridge::BeginFrame() {
+    ++mBuildSerial;
+    if (mBuildSerial == 0) ++mBuildSerial;
+
+    // RDRAM writes are not accompanied by a dirty-page map in the static
+    // runtime. Revalidate each staged texture once per presented N64 frame.
+    // A frame commonly contains several graphics tasks; invalidating here
+    // avoids hashing and copying the same source allocation for every task.
+    for (u32 i = 0; i < mTextureStageCount; ++i) mTextureStages[i].dirty = true;
+}
+
 void* Fast3DMemoryBridge::Alloc(size_t size, size_t alignment) {
     if (size == 0) size = 1;
     if (alignment < sizeof(void*)) alignment = sizeof(void*);
@@ -1080,14 +1091,6 @@ void* Fast3DMemoryBridge::TranslateList(u32 address, GBIVersion& version, u32 de
 
 void* Fast3DMemoryBridge::BuildDisplayList(u32 address, GBIVersion version) {
     Reset();
-
-    ++mBuildSerial;
-    if (mBuildSerial == 0) ++mBuildSerial;
-
-    // Static recompilation does not expose the emulator's RDRAM dirty-page
-    // bitmap. Revalidate staged textures on each submitted task so dynamic
-    // HUD and effect textures cannot retain stale guest data.
-    for (u32 i = 0; i < mTextureStageCount; ++i) mTextureStages[i].dirty = true;
 
     mTranslationFailed = false;
     mSawFullSync = false;

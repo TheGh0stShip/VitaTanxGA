@@ -40,6 +40,7 @@ public:
     Fast3DMemoryBridge(u8* rdram, u32 rdram_size);
     ~Fast3DMemoryBridge();
     void SetInterpreter(Fast::Interpreter* interpreter) { mInterpreter = interpreter; }
+    void BeginFrame();
     void* BuildDisplayList(u32 address, GBIVersion version);
     bool SawFullSync() const { return mSawFullSync; }
 
