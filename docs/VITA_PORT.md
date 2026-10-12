@@ -48,14 +48,16 @@ modulation; and separates alpha surfaces from opaque depth writes. The full
 and GXM depth testing. Portable gameplay state currently covers tank movement,
 terrain following, turret aim, projectiles, ammunition, the recovered
 three-hostile first-mission roster, pursuit and firing, damage, enemy-only
-victory evaluation,
-repeatable mission resets, and title/gameplay/pause
-transitions. Tank body, turret, tread, and color-detail layers are resolved
+victory evaluation, repeatable mission resets, and title/gameplay/pause
+transitions. Live projectiles use the retail 32x32 I8 sprite copied by the
+original game from ROM offset `0x102068`. N64 intensity is replicated into
+RGBA, including alpha, so its black border remains transparent in the Vita
+alpha pass. Tank body, turret, tread, and color-detail layers are resolved
 through the original common-world model-ID table and rendered from retail
 geometry, materials, and textures. The hostiles use the distinct recovered
 six-part tank-kind-4 definition instead of the player's M1A1. The companion
-world is also decoded for
-entry type 7 placements; all 41 first-mission pickups resolve through the
+world is also decoded for entry type 7 placements; all 41 first-mission
+pickups resolve through the
 retail 20-entry gameplay model table, load their common-world textures, and
 render with the original rotation behavior. Their recovered mode handler now
 applies the retail quantities for health, base ammunition, swarmers, lasers,

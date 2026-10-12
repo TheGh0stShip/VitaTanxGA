@@ -110,6 +110,7 @@ static vita2d_color_vertex s_draw_vertices[kMaximumProjectedTriangles * 3];
 static vita2d_texture_vertex s_texture_vertices[kMaximumProjectedTriangles * 3];
 static CachedTexture s_texture_cache[kMaximumTextureCache];
 static uint32_t s_texture_cache_count;
+static CachedTexture s_projectile_texture;
 
 static const CachedTexture *find_cached_texture(uint32_t texture_offset,
                                                 uint32_t texture_size,
@@ -260,6 +261,38 @@ static bool load_file(const char *path, LoadedFile *loaded) {
     return true;
 }
 
+static bool load_projectile_texture(void) {
+    LoadedFile image = {0};
+    BtgaTextureInfo info = {
+        .image_offset = 0, .width = 32, .height = 32,
+        .format_id = 4, .size_id = 1,
+    };
+    uint32_t pixels[32 * 32];
+    uint8_t *destination;
+    unsigned int stride;
+    unsigned int row;
+    if (!load_file("app0:assets/gameplay/projectile_0.i8", &image) ||
+        image.size != 32u * 32u ||
+        !btga_texture_decode_rgba(image.data, image.size, &info, pixels,
+                                  32u * 32u)) {
+        free(image.data);
+        return false;
+    }
+    free(image.data);
+    s_projectile_texture = (CachedTexture){.info = info, .transparent = true};
+    s_projectile_texture.texture = vita2d_create_empty_texture(32, 32);
+    if (s_projectile_texture.texture == NULL) return false;
+    destination = vita2d_texture_get_datap(s_projectile_texture.texture);
+    stride = vita2d_texture_get_stride(s_projectile_texture.texture);
+    for (row = 0; row < 32; row++)
+        memcpy(destination + row * stride, pixels + row * 32,
+               32u * sizeof(*pixels));
+    vita2d_texture_set_filters(s_projectile_texture.texture,
+                               SCE_GXM_TEXTURE_FILTER_LINEAR,
+                               SCE_GXM_TEXTURE_FILTER_LINEAR);
+    return true;
+}
+
 static bool validate_first_mission(void) {
     LoadedFile header = {0};
     uint8_t scene_type, scene_setting;
@@ -390,6 +423,7 @@ static bool load_first_world(void) {
                 btga_terrain_build(&s_world_components, s_geometry_pool.data,
                                    s_geometry_pool.size, &bounds, &s_terrain) &&
                 build_texture_cache() &&
+                load_projectile_texture() &&
                 btga_tank_definition(s_gameplay_data.data, s_gameplay_data.size,
                                      0, &s_player_tank) &&
                 btga_campaign_mission_config(s_campaign_config_file.data,
@@ -436,6 +470,10 @@ cleanup:
     for (index = 0; index < s_texture_cache_count; index++)
         vita2d_free_texture(s_texture_cache[index].texture);
     s_texture_cache_count = 0;
+    if (s_projectile_texture.texture != NULL) {
+        vita2d_free_texture(s_projectile_texture.texture);
+        s_projectile_texture = (CachedTexture){0};
+    }
     for (index = 0; index < 7; index++) {
         free(s_world_files[index].data);
         s_world_files[index] = (LoadedFile){0};
@@ -604,12 +642,62 @@ static int compare_triangle_depth(const void *left, const void *right) {
     return a->depth < b->depth ? 1 : a->depth > b->depth ? -1 : 0;
 }
 
+static void queue_projectile_billboard(DrawSceneContext *draw,
+                                       const BtgaProjectile *projectile) {
+    static const uint8_t corners[2][3] = {{0, 1, 2}, {0, 2, 3}};
+    static const float corner_x[4] = {-1.0f, 1.0f, 1.0f, -1.0f};
+    static const float corner_y[4] = {-1.0f, -1.0f, 1.0f, 1.0f};
+    static const float corner_u[4] = {0.0f, 1.0f, 1.0f, 0.0f};
+    static const float corner_v[4] = {0.0f, 0.0f, 1.0f, 1.0f};
+    float world[3] = {projectile->x, projectile->y, projectile->z};
+    BtgaProjectedPoint center;
+    float x;
+    float y;
+    float half_width;
+    float half_height;
+    float normalized_depth;
+    unsigned int triangle;
+    if (s_projectile_texture.texture == NULL ||
+        !btga_project(&draw->projector, world, &center)) return;
+    x = (center.x + 1.0f) * 480.0f;
+    y = (1.0f - center.y) * 272.0f;
+    half_width = 18.0f * draw->projector.horizontal_scale / center.depth * 480.0f;
+    half_height = 18.0f * draw->projector.vertical_scale / center.depth * 272.0f;
+    normalized_depth = center.depth / 20000.0f;
+    if (normalized_depth > 1.0f) normalized_depth = 1.0f;
+    for (triangle = 0; triangle < 2 && draw->count < kMaximumProjectedTriangles;
+         triangle++) {
+        ProjectedTriangle *output = &s_projected_triangles[draw->count++];
+        unsigned int vertex;
+        *output = (ProjectedTriangle){
+            .texture = &s_projectile_texture,
+            .color = 0xFFFFFFFFu,
+            .depth = center.depth,
+            .actor = true,
+            .transparent = true,
+        };
+        for (vertex = 0; vertex < 3; vertex++) {
+            uint8_t corner = corners[triangle][vertex];
+            float screen_x = x + corner_x[corner] * half_width;
+            float screen_y = y + corner_y[corner] * half_height;
+            output->texture_vertices[vertex] = (vita2d_texture_vertex){
+                screen_x, screen_y, normalized_depth,
+                corner_u[corner], corner_v[corner],
+            };
+            output->vertices[vertex] = (vita2d_color_vertex){
+                screen_x, screen_y, normalized_depth, 0xFFFFFFFFu,
+            };
+        }
+    }
+}
+
 static uint32_t draw_world(const BtgaRuntime *runtime) {
     DrawSceneContext draw = {0};
     BtgaSceneSummary scene;
     uint32_t tank_triangles;
     uint32_t tank_part;
     uint32_t enemy_index;
+    uint32_t projectile_index;
     uint32_t pickup_index;
     uint32_t triangle_index;
     if (!btga_projector_init(&runtime->camera, 960.0f / 544.0f, 37.0f, 16.0f,
@@ -653,6 +741,11 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
                                   1000, draw_world_triangle, &draw,
                                   &tank_triangles)) return 0;
         }
+    }
+    for (projectile_index = 0; projectile_index < BTGA_MAX_PROJECTILES;
+         projectile_index++) {
+        const BtgaProjectile *projectile = &runtime->projectiles[projectile_index];
+        if (projectile->active) queue_projectile_billboard(&draw, projectile);
     }
     for (pickup_index = 0; pickup_index < s_pickup_count; pickup_index++) {
         uint16_t spin = (uint16_t)(runtime->simulation_ticks * 0x600u);
@@ -998,6 +1091,10 @@ void vita_platform_shutdown(void) {
     for (index = 0; index < s_texture_cache_count; index++)
         vita2d_free_texture(s_texture_cache[index].texture);
     s_texture_cache_count = 0;
+    if (s_projectile_texture.texture != NULL) {
+        vita2d_free_texture(s_projectile_texture.texture);
+        s_projectile_texture = (CachedTexture){0};
+    }
     free(s_texture_pool.data);
     s_texture_pool = (LoadedFile){0};
     free(s_intro_stream.data);

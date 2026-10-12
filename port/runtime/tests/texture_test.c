@@ -32,5 +32,23 @@ int btga_texture_tests(void) {
     info.v_shift = 15;
     assert(btga_texture_u(&info, 192) == 0.125f);
     assert(btga_texture_v(&info, 48) == 0.5f);
+    {
+        uint8_t intensity[] = {0x0F, 0x80};
+        uint32_t decoded[3];
+        info = (BtgaTextureInfo){
+            .image_offset = 0, .width = 2, .height = 1,
+            .format_id = 4, .size_id = 0,
+        };
+        assert(btga_texture_decode_rgba(intensity, sizeof(intensity), &info,
+                                        decoded, 3));
+        assert(decoded[0] == 0x00000000u);
+        assert(decoded[1] == 0xFFFFFFFFu);
+        info.width = 1;
+        info.size_id = 1;
+        info.image_offset = 1;
+        assert(btga_texture_decode_rgba(intensity, sizeof(intensity), &info,
+                                        decoded, 3));
+        assert(decoded[0] == 0x80808080u);
+    }
     return 0;
 }

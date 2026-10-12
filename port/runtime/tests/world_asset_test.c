@@ -52,6 +52,7 @@ int main(int argc, char **argv) {
     LoadedFile state = {0};
     LoadedFile texture = {0};
     LoadedFile gameplay = {0};
+    LoadedFile projectile_texture = {0};
     uint32_t *texture_pixels = NULL;
     size_t texture_capacity = 0;
     BtgaWorldComponents components;
@@ -74,8 +75,8 @@ int main(int argc, char **argv) {
     BtgaTankDefinition enemy_tank;
     int result = 1;
 
-    if (argc != 8) {
-        fprintf(stderr, "usage: %s WORLD_DIRECTORY GEOMETRY_POOL STATE_POOL TEXTURE_POOL COMMON_WORLD SPAWN_WORLD GAMEPLAY_DATA\n",
+    if (argc != 9) {
+        fprintf(stderr, "usage: %s WORLD_DIRECTORY GEOMETRY_POOL STATE_POOL TEXTURE_POOL COMMON_WORLD SPAWN_WORLD GAMEPLAY_DATA PROJECTILE_I8\n",
                 argv[0]);
         return 2;
     }
@@ -108,6 +109,30 @@ int main(int argc, char **argv) {
     if (!load_path(argv[7], &gameplay)) {
         fprintf(stderr, "failed to load gameplay definitions\n");
         goto cleanup;
+    }
+    if (!load_path(argv[8], &projectile_texture)) {
+        fprintf(stderr, "failed to load projectile texture\n");
+        goto cleanup;
+    }
+    {
+        BtgaTextureInfo projectile_info = {
+            .image_offset = 0, .width = 32, .height = 32,
+            .format_id = 4, .size_id = 1,
+        };
+        uint32_t projectile_pixels[32 * 32];
+        bool have_clear = false;
+        bool have_opaque = false;
+        if (projectile_texture.size != 32u * 32u ||
+            !btga_texture_decode_rgba(projectile_texture.data,
+                                      projectile_texture.size, &projectile_info,
+                                      projectile_pixels, 32u * 32u)) goto cleanup;
+        for (index = 0; index < 32u * 32u; index++) {
+            uint8_t alpha = (uint8_t)(projectile_pixels[index] >> 24);
+            have_clear |= alpha == 0;
+            have_opaque |= alpha == 255;
+        }
+        if (!have_clear || !have_opaque) goto cleanup;
+        printf("projectile I8 texture validated: transparent intensity alpha\n");
     }
     if (files[0].size != 4) goto cleanup;
     components = (BtgaWorldComponents){
@@ -326,6 +351,7 @@ cleanup:
     free(state.data);
     free(texture.data);
     free(gameplay.data);
+    free(projectile_texture.data);
     free(texture_pixels);
     return result;
 }

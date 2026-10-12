@@ -178,14 +178,16 @@ bool btga_texture_decode_rgba(const uint8_t *chunk, size_t size,
             uint8_t packed = chunk[info->image_offset + index / 2];
             uint8_t intensity = ((index & 1) == 0 ? packed >> 4 : packed & 15) * 17;
             pixels[index] = (uint32_t)intensity | ((uint32_t)intensity << 8) |
-                            ((uint32_t)intensity << 16) | 0xFF000000u;
+                            ((uint32_t)intensity << 16) |
+                            ((uint32_t)intensity << 24);
         }
     } else if (info->format_id == 4 && info->size_id == 1) {
         if (info->image_offset > size || count > size - info->image_offset) return false;
         for (index = 0; index < count; index++) {
             uint8_t intensity = chunk[info->image_offset + index];
             pixels[index] = (uint32_t)intensity | ((uint32_t)intensity << 8) |
-                            ((uint32_t)intensity << 16) | 0xFF000000u;
+                            ((uint32_t)intensity << 16) |
+                            ((uint32_t)intensity << 24);
         }
     } else {
         return false;
