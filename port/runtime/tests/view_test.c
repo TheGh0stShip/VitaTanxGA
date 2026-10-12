@@ -20,6 +20,11 @@ int btga_view_tests(void) {
     assert(projected.x == 0.0f && projected.y == 0.0f && projected.depth == 100.0f);
     assert(btga_project_point(&camera, right, 1.0f, 90.0f, 16.0f, &projected));
     assert(projected.x > 0.09f && projected.x < 0.11f);
+    {
+        BtgaProjector projector;
+        assert(btga_projector_init(&camera, 1.0f, 90.0f, 16.0f, &projector));
+        assert(btga_view_depth(&projector, right) == 100.0f);
+    }
     center[2] = 15.0f;
     assert(!btga_project_point(&camera, center, 1.0f, 90.0f, 16.0f, &projected));
     return 0;

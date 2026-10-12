@@ -38,6 +38,7 @@ void btga_place_triangle(const BtgaPlacedTriangle *triangle, float world[3][3]);
 bool btga_projector_init(const BtgaCamera *camera, float aspect,
                          float vertical_fov_degrees, float near_plane,
                          BtgaProjector *projector);
+float btga_view_depth(const BtgaProjector *projector, const float world[3]);
 bool btga_project(const BtgaProjector *projector, const float world[3],
                   BtgaProjectedPoint *projected);
 bool btga_project_point(const BtgaCamera *camera, const float world[3],

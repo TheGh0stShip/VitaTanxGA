@@ -63,12 +63,25 @@ bool btga_project(const BtgaProjector *projector, const float world[3],
     camera_x = projector->yaw_cosine * dx - projector->yaw_sine * dz;
     horizontal_depth = projector->yaw_sine * dx + projector->yaw_cosine * dz;
     camera_y = projector->pitch_cosine * dy - projector->pitch_sine * horizontal_depth;
-    depth = projector->pitch_sine * dy + projector->pitch_cosine * horizontal_depth;
+    depth = btga_view_depth(projector, world);
     if (depth < projector->near_plane) return false;
     projected->x = camera_x * projector->horizontal_scale / depth;
     projected->y = camera_y * projector->vertical_scale / depth;
     projected->depth = depth;
     return true;
+}
+
+float btga_view_depth(const BtgaProjector *projector, const float world[3]) {
+    float dx;
+    float dy;
+    float dz;
+    float horizontal_depth;
+    if (projector == NULL || world == NULL) return -1.0f;
+    dx = world[0] - projector->camera_x;
+    dy = world[1] - projector->camera_y;
+    dz = world[2] - projector->camera_z;
+    horizontal_depth = projector->yaw_sine * dx + projector->yaw_cosine * dz;
+    return projector->pitch_sine * dy + projector->pitch_cosine * horizontal_depth;
 }
 
 bool btga_project_point(const BtgaCamera *camera, const float world[3],

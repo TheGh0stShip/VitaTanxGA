@@ -457,9 +457,28 @@ cleanup:
     return valid;
 }
 
-static bool draw_world_triangle(const BtgaPlacedTriangle *triangle, void *context) {
-    DrawSceneContext *draw = context;
-    float world[3][3];
+typedef struct ClippedVertex {
+    float world[3];
+    float u;
+    float v;
+    float depth;
+} ClippedVertex;
+
+static ClippedVertex interpolate_vertex(const ClippedVertex *a,
+                                         const ClippedVertex *b, float amount) {
+    ClippedVertex result;
+    unsigned int axis;
+    for (axis = 0; axis < 3; axis++)
+        result.world[axis] = a->world[axis] +
+                             (b->world[axis] - a->world[axis]) * amount;
+    result.u = a->u + (b->u - a->u) * amount;
+    result.v = a->v + (b->v - a->v) * amount;
+    result.depth = a->depth + (b->depth - a->depth) * amount;
+    return result;
+}
+
+static bool emit_projected_triangle(DrawSceneContext *draw,
+                                    const ClippedVertex vertices[3]) {
     BtgaProjectedPoint projected[3];
     ProjectedTriangle *output;
     float depth = 0.0f;
@@ -469,9 +488,9 @@ static bool draw_world_triangle(const BtgaPlacedTriangle *triangle, void *contex
     unsigned int blue;
     unsigned int index;
     if (draw->count >= kMaximumProjectedTriangles) return true;
-    btga_place_triangle(triangle, world);
     for (index = 0; index < 3; index++) {
-        if (!btga_project(&draw->projector, world[index], &projected[index])) return true;
+        if (!btga_project(&draw->projector, vertices[index].world,
+                          &projected[index])) return false;
         depth += projected[index].depth;
     }
     if ((projected[0].x < -1.2f && projected[1].x < -1.2f && projected[2].x < -1.2f) ||
@@ -481,35 +500,11 @@ static bool draw_world_triangle(const BtgaPlacedTriangle *triangle, void *contex
     output = &s_projected_triangles[draw->count++];
     output->depth = depth / 3.0f;
     output->actor = draw->actor;
-    if (!draw->material_cached || draw->state_offset != triangle->state_offset ||
-        draw->state_size != triangle->state_size) {
-        draw->state_offset = triangle->state_offset;
-        draw->state_size = triangle->state_size;
-        draw->material = (BtgaMaterialColor){110, 170, 90, 255, false};
-        if (triangle->state_offset <= s_state_pool.size &&
-            triangle->state_size <= s_state_pool.size - triangle->state_offset)
-            btga_material_color(s_state_pool.data + triangle->state_offset,
-                                triangle->state_size, &draw->material);
-        draw->material_cached = true;
-    }
     shade = output->depth >= 16000.0f ? 70u : 230u - (unsigned int)(output->depth / 100.0f);
     if (shade < 70u) shade = 70u;
     red = draw->material.red * shade / 255u;
     green = draw->material.green * shade / 255u;
     blue = draw->material.blue * shade / 255u;
-    if (draw->texture_offset != triangle->texture_offset ||
-        draw->texture_size != triangle->texture_size ||
-        draw->texture_state_offset != triangle->state_offset ||
-        draw->texture_state_size != triangle->state_size) {
-        draw->texture_offset = triangle->texture_offset;
-        draw->texture_size = triangle->texture_size;
-        draw->texture_state_offset = triangle->state_offset;
-        draw->texture_state_size = triangle->state_size;
-        draw->texture = find_cached_texture(triangle->texture_offset,
-                                            triangle->texture_size,
-                                            triangle->state_offset,
-                                            triangle->state_size);
-    }
     output->texture = draw->texture;
     output->color = RGBA8(red, green, blue, draw->material.alpha);
     output->transparent = draw->material.alpha != 255 ||
@@ -526,15 +521,72 @@ static bool draw_world_triangle(const BtgaPlacedTriangle *triangle, void *contex
         };
         output->texture_vertices[index] = (vita2d_texture_vertex){
             output->vertices[index].x, output->vertices[index].y, normalized_depth,
-            output->texture != NULL
-                ? btga_texture_u(&output->texture->info,
-                                 triangle->vertices[index].s)
-                : 0.0f,
-            output->texture != NULL
-                ? btga_texture_v(&output->texture->info,
-                                 triangle->vertices[index].t)
-                : 0.0f,
+            vertices[index].u, vertices[index].v,
         };
+    }
+    return true;
+}
+
+static bool draw_world_triangle(const BtgaPlacedTriangle *triangle, void *context) {
+    DrawSceneContext *draw = context;
+    float world[3][3];
+    ClippedVertex input[4];
+    ClippedVertex clipped[4];
+    unsigned int input_count = 3;
+    unsigned int clipped_count = 0;
+    unsigned int index;
+    if (draw->count >= kMaximumProjectedTriangles) return true;
+    if (!draw->material_cached || draw->state_offset != triangle->state_offset ||
+        draw->state_size != triangle->state_size) {
+        draw->state_offset = triangle->state_offset;
+        draw->state_size = triangle->state_size;
+        draw->material = (BtgaMaterialColor){110, 170, 90, 255, false};
+        if (triangle->state_offset <= s_state_pool.size &&
+            triangle->state_size <= s_state_pool.size - triangle->state_offset)
+            btga_material_color(s_state_pool.data + triangle->state_offset,
+                                triangle->state_size, &draw->material);
+        draw->material_cached = true;
+    }
+    if (draw->texture_offset != triangle->texture_offset ||
+        draw->texture_size != triangle->texture_size ||
+        draw->texture_state_offset != triangle->state_offset ||
+        draw->texture_state_size != triangle->state_size) {
+        draw->texture_offset = triangle->texture_offset;
+        draw->texture_size = triangle->texture_size;
+        draw->texture_state_offset = triangle->state_offset;
+        draw->texture_state_size = triangle->state_size;
+        draw->texture = find_cached_texture(triangle->texture_offset,
+                                            triangle->texture_size,
+                                            triangle->state_offset,
+                                            triangle->state_size);
+    }
+    btga_place_triangle(triangle, world);
+    for (index = 0; index < input_count; index++) {
+        unsigned int axis;
+        for (axis = 0; axis < 3; axis++) input[index].world[axis] = world[index][axis];
+        input[index].u = draw->texture != NULL
+            ? btga_texture_u(&draw->texture->info, triangle->vertices[index].s) : 0.0f;
+        input[index].v = draw->texture != NULL
+            ? btga_texture_v(&draw->texture->info, triangle->vertices[index].t) : 0.0f;
+        input[index].depth = btga_view_depth(&draw->projector, input[index].world);
+    }
+    for (index = 0; index < input_count; index++) {
+        const ClippedVertex *previous = &input[(index + input_count - 1) % input_count];
+        const ClippedVertex *current = &input[index];
+        bool previous_inside = previous->depth >= draw->projector.near_plane;
+        bool current_inside = current->depth >= draw->projector.near_plane;
+        if (previous_inside != current_inside) {
+            float amount = (draw->projector.near_plane - previous->depth) /
+                           (current->depth - previous->depth);
+            clipped[clipped_count++] = interpolate_vertex(previous, current, amount);
+            clipped[clipped_count - 1].depth = draw->projector.near_plane;
+        }
+        if (current_inside) clipped[clipped_count++] = *current;
+    }
+    if (clipped_count < 3) return true;
+    for (index = 1; index + 1 < clipped_count; index++) {
+        ClippedVertex output[3] = {clipped[0], clipped[index], clipped[index + 1]};
+        if (!emit_projected_triangle(draw, output)) return false;
     }
     return true;
 }
