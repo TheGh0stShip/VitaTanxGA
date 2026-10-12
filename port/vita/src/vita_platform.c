@@ -33,6 +33,7 @@ typedef struct LoadedFile {
     size_t size;
 } LoadedFile;
 
+static LoadedFile s_intro_stream;
 static LoadedFile s_world_files[7];
 static LoadedFile s_common_files[7];
 static LoadedFile s_spawn_files[7];
@@ -251,12 +252,19 @@ static bool validate_first_mission(void) {
             !load_file(path, &stream) ||
             !btga_script_stream_validate(stream.data, stream.size, &summary)) {
             free(stream.data);
+            free(s_intro_stream.data);
+            s_intro_stream = (LoadedFile){0};
             return false;
         }
         command_count += summary.command_count;
-        free(stream.data);
+        if (index == 27) s_intro_stream = stream;
+        else free(stream.data);
     }
-    if (command_count != 23483) return false;
+    if (command_count != 23483) {
+        free(s_intro_stream.data);
+        s_intro_stream = (LoadedFile){0};
+        return false;
+    }
     s_mission_stream_count = stream_count;
     s_mission_command_count = command_count;
     return true;
@@ -606,6 +614,13 @@ bool vita_platform_spawn(uint8_t row, uint8_t column, BtgaWorldSpawn *spawn) {
     return s_world_ready && btga_world_find_spawn(&s_spawn_components, row, column, spawn);
 }
 
+bool vita_platform_intro_script(const uint8_t **data, size_t *size) {
+    if (data == NULL || size == NULL || s_intro_stream.data == NULL) return false;
+    *data = s_intro_stream.data;
+    *size = s_intro_stream.size;
+    return true;
+}
+
 static bool project_to_screen(const BtgaProjector *projector, float x, float y,
                               float z, float *screen_x, float *screen_y) {
     float world[3] = {x, y, z};
@@ -614,6 +629,43 @@ static bool project_to_screen(const BtgaProjector *projector, float x, float y,
     *screen_x = (point.x + 1.0f) * 480.0f;
     *screen_y = (1.0f - point.y) * 272.0f;
     return true;
+}
+
+static void draw_wrapped_text(const char *text, int x, int y, int max_width,
+                              uint32_t color, float scale) {
+    char line[160];
+    size_t used = 0;
+    const char *word = text;
+    while (word != NULL && *word != '\0' && *word != '\r') {
+        const char *end;
+        size_t length;
+        while (*word == ' ') word++;
+        end = word;
+        while (*end != '\0' && *end != '\r' && *end != ' ') end++;
+        length = (size_t)(end - word);
+        if (length == 0) break;
+        if (length >= sizeof(line)) length = sizeof(line) - 1;
+        if (used != 0 && used + 1 + length < sizeof(line)) {
+            line[used] = ' ';
+            memcpy(line + used + 1, word, length);
+            line[used + 1 + length] = '\0';
+            if (vita2d_pgf_text_width(s_font, scale, line) > max_width) {
+                line[used] = '\0';
+                vita2d_pgf_draw_text(s_font, x, y, color, scale, line);
+                y += 34;
+                used = 0;
+            }
+        }
+        if (used == 0) {
+            memcpy(line, word, length);
+            used = length;
+            line[used] = '\0';
+        } else {
+            used += 1 + length;
+        }
+        word = end;
+    }
+    if (used != 0) vita2d_pgf_draw_text(s_font, x, y, color, scale, line);
 }
 
 static void draw_actors(const BtgaRuntime *runtime) {
@@ -696,6 +748,15 @@ void vita_platform_draw(const BtgaRuntime *runtime) {
                                   s_mission_stream_count,
                                   (unsigned long)s_mission_command_count);
         }
+    } else if (runtime->screen == BTGA_SCREEN_INTRO) {
+        uint32_t color = RGBA8(runtime->intro.red, runtime->intro.green,
+                               runtime->intro.blue, 255);
+        vita2d_pgf_draw_text(s_font, 70, 72, kColorOrange, 0.72f,
+                             "SAN FRANCISCO - FIVE YEARS AFTER THE PLAGUE");
+        if (runtime->intro.text != NULL)
+            draw_wrapped_text(runtime->intro.text, 70, 238, 820, color, 0.72f);
+        vita2d_pgf_draw_text(s_font, 70, 486, kColorGray, 0.58f,
+                             "CROSS: continue   CIRCLE: skip intro");
     } else if (runtime->screen == BTGA_SCREEN_GAMEPLAY ||
                runtime->screen == BTGA_SCREEN_PAUSED) {
         vita2d_pgf_draw_textf(s_font, 18, 30, kColorWhite, 0.64f,
@@ -748,6 +809,8 @@ void vita_platform_shutdown(void) {
     s_texture_cache_count = 0;
     free(s_texture_pool.data);
     s_texture_pool = (LoadedFile){0};
+    free(s_intro_stream.data);
+    s_intro_stream = (LoadedFile){0};
     free(s_gameplay_data.data);
     s_gameplay_data = (LoadedFile){0};
     vita2d_fini();

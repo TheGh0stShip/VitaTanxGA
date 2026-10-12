@@ -48,18 +48,23 @@ transitions. Tank body, turret, tread, and color-detail layers are resolved
 through the original common-world model-ID table and rendered from retail
 geometry, materials, and textures.
 
-The portable script loader also validates the first campaign script header and
+The portable script loader validates the first campaign script header and
 all 41 split streams using the retail command-width rules. The full 23,483
 command corpus is checked for bounded operands, terminated strings, per-stream
 terminators, and stream-type-dependent command sizes before the Vita runtime
-marks mission assets ready. Command execution is the next layer above this
-validated bytecode boundary.
+marks mission assets ready. A bounded portable cursor now executes the
+recovered type-51 opening stream, including its seven text events, color and
+position state, original 30 Hz waits, completion, and player-driven advance or
+skip. The opening runs between the title and gameplay without copying or
+rewriting the extracted strings. Execution of world-object, camera, and combat
+mission streams remains to be connected to their runtime consumers.
 
 `make vita-check` tests the portable loaders against synthetic malformed
 inputs and all 1,287 geometry/state references plus all 1,285 textured
 references in the extracted first-level data,
 The gate additionally validates all 23,483 commands in the extracted first
-campaign script, then validates that the port ELF is
+campaign script and executes the opening stream to its terminator while
+requiring all seven retail text events, then validates that the port ELF is
 32-bit ARMv7-A and uses the same VFP-register calling convention as the
 installed VitaSDK. This is a cross-build gate only; it is not a
 physical-hardware validation claim. Do not install or launch it on hardware

@@ -10,6 +10,12 @@ int main(void) {
         return 1;
     }
     btga_runtime_init(&runtime, vita_platform_assets_ready());
+    {
+        const uint8_t *intro_data;
+        size_t intro_size;
+        if (vita_platform_intro_script(&intro_data, &intro_size))
+            btga_runtime_set_intro_script(&runtime, intro_data, intro_size);
+    }
     if (vita_platform_world_bounds(&bounds)) {
         btga_runtime_set_world_bounds(&runtime, bounds.min_x, bounds.min_z,
                                       bounds.max_x, bounds.max_z);

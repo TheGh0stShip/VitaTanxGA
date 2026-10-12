@@ -23,7 +23,14 @@ int main(void) {
     btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US * 2);
     assert(runtime.simulation_ticks == 2);
 
+    {
+        static const uint8_t intro[] = {8, 51, 21, 'H', 'I', 0, 1, 0, 1, 0};
+        assert(btga_runtime_set_intro_script(&runtime, intro, sizeof(intro)));
+    }
     input.pressed = BTGA_BUTTON_CONFIRM;
+    btga_runtime_update(&runtime, &input, 0);
+    assert(runtime.screen == BTGA_SCREEN_INTRO);
+    input.pressed = BTGA_BUTTON_CANCEL;
     btga_runtime_update(&runtime, &input, 0);
     assert(runtime.screen == BTGA_SCREEN_GAMEPLAY);
 

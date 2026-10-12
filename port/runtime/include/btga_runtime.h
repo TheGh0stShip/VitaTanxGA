@@ -6,6 +6,7 @@
 
 #include "btga_view.h"
 #include "btga_terrain.h"
+#include "btga_script.h"
 
 enum BtgaButton {
     BTGA_BUTTON_CONFIRM = 1u << 0,
@@ -36,6 +37,7 @@ typedef enum BtgaRuntimeScreen {
     BTGA_SCREEN_PAUSED = 2,
     BTGA_SCREEN_VICTORY = 3,
     BTGA_SCREEN_DEFEAT = 4,
+    BTGA_SCREEN_INTRO = 5,
 } BtgaRuntimeScreen;
 
 typedef struct BtgaPlayer {
@@ -86,6 +88,8 @@ typedef struct BtgaRuntime {
     float world_max_x;
     float world_max_z;
     BtgaRuntimeScreen screen;
+    BtgaScriptCursor intro;
+    bool intro_ready;
     bool assets_ready;
     bool running;
 } BtgaRuntime;
@@ -103,6 +107,8 @@ void btga_runtime_set_player_spawn(BtgaRuntime *runtime, float x, float y,
                                    float z, uint16_t yaw);
 bool btga_runtime_add_enemy(BtgaRuntime *runtime, float x, float y, float z,
                             uint16_t yaw);
+bool btga_runtime_set_intro_script(BtgaRuntime *runtime, const uint8_t *data,
+                                   size_t size);
 void btga_runtime_update(BtgaRuntime *runtime, const BtgaInput *input,
                          uint32_t elapsed_us);
 uint32_t btga_runtime_active_enemies(const BtgaRuntime *runtime);

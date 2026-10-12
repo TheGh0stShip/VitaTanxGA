@@ -175,6 +175,13 @@ bool btga_runtime_add_enemy(BtgaRuntime *runtime, float x, float y, float z,
     return false;
 }
 
+bool btga_runtime_set_intro_script(BtgaRuntime *runtime, const uint8_t *data,
+                                   size_t size) {
+    if (runtime == NULL) return false;
+    runtime->intro_ready = btga_script_cursor_init(&runtime->intro, data, size);
+    return runtime->intro_ready;
+}
+
 void btga_runtime_set_terrain(BtgaRuntime *runtime, const BtgaTerrain *terrain) {
     float height;
     if (runtime == NULL) return;
@@ -246,8 +253,19 @@ void btga_runtime_update(BtgaRuntime *runtime, const BtgaInput *input,
     }
     if (runtime->screen == BTGA_SCREEN_TITLE &&
         (input->pressed & BTGA_BUTTON_CONFIRM) != 0 && runtime->assets_ready) {
-        runtime->screen = BTGA_SCREEN_GAMEPLAY;
+        if (runtime->intro_ready) {
+            const uint8_t *data = runtime->intro.data;
+            size_t size = runtime->intro.size;
+            runtime->intro_ready = btga_script_cursor_init(&runtime->intro,
+                                                            data, size);
+        }
+        runtime->screen = runtime->intro_ready ? BTGA_SCREEN_INTRO
+                                               : BTGA_SCREEN_GAMEPLAY;
         runtime->pending_pressed &= ~BTGA_BUTTON_CONFIRM;
+    } else if (runtime->screen == BTGA_SCREEN_INTRO &&
+               (input->pressed & BTGA_BUTTON_CANCEL) != 0) {
+        runtime->screen = BTGA_SCREEN_GAMEPLAY;
+        runtime->pending_pressed &= ~BTGA_BUTTON_CANCEL;
     } else if (runtime->screen == BTGA_SCREEN_GAMEPLAY &&
                (input->pressed & BTGA_BUTTON_START) != 0) {
         runtime->screen = BTGA_SCREEN_PAUSED;
@@ -275,6 +293,13 @@ void btga_runtime_update(BtgaRuntime *runtime, const BtgaInput *input,
            steps < BTGA_MAX_STEPS_PER_FRAME) {
         if (runtime->screen == BTGA_SCREEN_GAMEPLAY)
             update_gameplay(runtime, input, runtime->pending_pressed);
+        else if (runtime->screen == BTGA_SCREEN_INTRO) {
+            BtgaScriptStepResult result = btga_script_cursor_tick(
+                &runtime->intro,
+                (runtime->pending_pressed & BTGA_BUTTON_CONFIRM) != 0);
+            if (result == BTGA_SCRIPT_FINISHED || result == BTGA_SCRIPT_INVALID)
+                runtime->screen = BTGA_SCREEN_GAMEPLAY;
+        }
         runtime->pending_pressed = 0;
         runtime->accumulator_us -= BTGA_SIMULATION_STEP_US;
         runtime->simulation_ticks++;

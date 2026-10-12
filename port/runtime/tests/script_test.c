@@ -14,5 +14,14 @@ int btga_script_tests(void) {
     assert(summary.stream_type == 7 && summary.command_count == 5);
     assert(summary.wait_command_count == 1 && summary.text_command_count == 1);
     assert(!btga_script_stream_validate(stream, sizeof(stream) - 1, &summary));
+    {
+        BtgaScriptCursor cursor;
+        assert(btga_script_cursor_init(&cursor, stream, sizeof(stream)));
+        assert(btga_script_cursor_tick(&cursor, false) == BTGA_SCRIPT_RUNNING);
+        assert(cursor.wait_ticks == 30);
+        assert(btga_script_cursor_tick(&cursor, true) == BTGA_SCRIPT_TEXT);
+        assert(cursor.text_length == 2 && cursor.text[0] == 'G');
+        assert(btga_script_cursor_tick(&cursor, false) == BTGA_SCRIPT_FINISHED);
+    }
     return 0;
 }

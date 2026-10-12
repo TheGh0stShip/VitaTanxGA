@@ -26,12 +26,13 @@ The repository currently produces an installable PS Vita VPK that:
 - loads and validates the first extracted world's big-endian component tables;
 - packages decoded worlds, shared world pools, images, scripts, and libmus
   audio resources; and
-- parses and validates the first retail campaign script's 41 streams and
-  23,483 variable-width commands on the portable/Vita runtime boundary;
+- parses the first retail campaign script's 41 streams and 23,483
+  variable-width commands, and executes its recovered seven-card opening
+  narrative with original 30 Hz waits on the portable runtime boundary;
 - validates the executable and code-bearing libraries for ABI consistency.
 
 This is an **early runtime port**, not yet the complete game. Retail enemy and
-object behavior, execution of the validated mission commands, complete weapon rules, audio,
+object behavior, execution of the remaining mission commands, complete weapon rules, audio,
 the complete frontend, saving, and remaining platform services are still being
 ported from the recovered implementation.
 

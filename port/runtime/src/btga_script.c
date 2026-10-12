@@ -89,3 +89,62 @@ bool btga_script_stream_validate(const uint8_t *data, size_t size,
     }
     return false;
 }
+
+bool btga_script_cursor_init(BtgaScriptCursor *cursor, const uint8_t *data,
+                             size_t size) {
+    BtgaScriptStreamSummary summary;
+    if (cursor == NULL || !btga_script_stream_validate(data, size, &summary))
+        return false;
+    *cursor = (BtgaScriptCursor){
+        .data = data,
+        .size = size,
+        .stream_type = 0xFF,
+        .red = 255,
+        .green = 255,
+        .blue = 255,
+        .alpha = 255,
+    };
+    return true;
+}
+
+BtgaScriptStepResult btga_script_cursor_tick(BtgaScriptCursor *cursor,
+                                              bool skip_wait) {
+    if (cursor == NULL || cursor->data == NULL) return BTGA_SCRIPT_INVALID;
+    if (cursor->finished) return BTGA_SCRIPT_FINISHED;
+    if (skip_wait) cursor->wait_ticks = 0;
+    if (cursor->wait_ticks != 0) {
+        cursor->wait_ticks--;
+        return BTGA_SCRIPT_RUNNING;
+    }
+    while (cursor->offset < cursor->size) {
+        const uint8_t *command = cursor->data + cursor->offset;
+        uint8_t opcode = command[0];
+        size_t length;
+        if (!command_size(command, cursor->size - cursor->offset,
+                          cursor->stream_type, &length))
+            return BTGA_SCRIPT_INVALID;
+        cursor->offset += length;
+        if (opcode == 0) {
+            cursor->finished = true;
+            return BTGA_SCRIPT_FINISHED;
+        }
+        if (opcode == 8) cursor->stream_type = command[1];
+        else if (opcode == 1) {
+            cursor->wait_ticks = read_be_u16(command + 1);
+            return BTGA_SCRIPT_RUNNING;
+        } else if (opcode == 21) {
+            cursor->text = (const char *)(command + 1);
+            cursor->text_length = length - 2;
+            return BTGA_SCRIPT_TEXT;
+        } else if (opcode == 22) {
+            cursor->text_x = read_be_u16(command + 1);
+            cursor->text_y = read_be_u16(command + 3);
+        } else if (opcode == 25) {
+            cursor->red = command[1];
+            cursor->green = command[2];
+            cursor->blue = command[3];
+            cursor->alpha = command[4];
+        }
+    }
+    return BTGA_SCRIPT_INVALID;
+}
