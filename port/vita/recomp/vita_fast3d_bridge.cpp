@@ -733,13 +733,19 @@ void* Fast3DMemoryBridge::TranslateList(u32 address, GBIVersion& version, u32 de
                        siz == G_IM_SIZ_8b ? pixel :
                        siz == G_IM_SIZ_16b ? pixel * 2 : pixel * 4;
             };
+            const auto spanBytesForPixels = [siz, &bytesForPixels](u64 pixelOffset,
+                                                                   u64 pixelCount) -> u64 {
+                return siz == G_IM_SIZ_4b
+                    ? ((pixelOffset & 1) + pixelCount + 1) >> 1
+                    : bytesForPixels(pixelCount);
+            };
 
             const u32 offsetX = uls >> 2;
             const u32 offsetY = ult >> 2;
             const u32 tileWidth = ((lrs - uls) >> 2) + 1;
             const u32 tileHeight = ((lrt - ult) >> 2) + 1;
             const u64 fullLineBytes64 = bytesForPixels(width);
-            const u64 tileLineBytes = bytesForPixels(tileWidth);
+            const u64 tileLineBytes = spanBytesForPixels(offsetX, tileWidth);
             if (fullLineBytes64 == 0 || fullLineBytes64 > 0xFFFFFFFFu) return fail();
             const u32 fullLineBytes = (u32)fullLineBytes64;
             const u64 startOffset = fullLineBytes64 * offsetY + byteOffsetForPixel(offsetX);
@@ -782,7 +788,7 @@ void* Fast3DMemoryBridge::TranslateList(u32 address, GBIVersion& version, u32 de
                     byteOffsetForPixel(nextOffsetX);
                 const u64 nextRequired = nextStart +
                     (u64)(nextHeight - 1) * fullLineBytes +
-                    bytesForPixels(nextWidth);
+                    spanBytesForPixels(nextOffsetX, nextWidth);
                 if (nextRequired > stagedRequired) stagedRequired = nextRequired;
             }
 

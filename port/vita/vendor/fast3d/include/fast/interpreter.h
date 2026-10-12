@@ -192,6 +192,7 @@ struct TextureCacheKey {
     uint8_t fmt, siz;
     uint8_t palette_index;
     uint32_t size_bytes;
+    uint8_t nibble_offset;
 
     bool operator==(const TextureCacheKey& rhs) const {
         return texture_addr == rhs.texture_addr &&
@@ -199,7 +200,8 @@ struct TextureCacheKey {
                palette_addrs[1] == rhs.palette_addrs[1] &&
                fmt == rhs.fmt && siz == rhs.siz &&
                palette_index == rhs.palette_index &&
-               size_bytes == rhs.size_bytes;
+               size_bytes == rhs.size_bytes &&
+               nibble_offset == rhs.nibble_offset;
     }
 #ifdef __vita__
     struct Hasher {
@@ -323,6 +325,7 @@ struct RDP {
         uint32_t line_size_bytes;
         uint16_t tmem;
         bool derived_view;
+        uint8_t nibble_offset;
         uint32_t tex_flags;
         struct RawTexMetadata raw_tex_metadata;
         bool masked;

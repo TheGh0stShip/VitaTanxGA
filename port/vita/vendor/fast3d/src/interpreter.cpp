@@ -697,6 +697,8 @@ void Interpreter::ImportTextureRgba32(int tile, bool importReplacement) {
 }
 
 void Interpreter::ImportTextureIA4(int tile, bool importReplacement) {
+    const uint8_t nibbleOffset =
+        mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].nibble_offset;
     const RawTexMetadata* metadata = &mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].raw_tex_metadata;
     const uint8_t* addr =
         importReplacement && (metadata->resource != nullptr)
@@ -716,6 +718,9 @@ void Interpreter::ImportTextureIA4(int tile, bool importReplacement) {
                                                mRdp->texture_tile[tile].line_size_bytes);
     uint32_t width = widthBytes * 2;
     uint32_t height = widthBytes > 0 ? sizeBytes / widthBytes : 0;
+    const uint32_t tileWidth = static_cast<uint32_t>(
+        (mRdp->texture_tile[tile].lrs - mRdp->texture_tile[tile].uls + 4) / 4);
+    if (nibbleOffset != 0 && tileWidth > 0 && tileWidth < width) width = tileWidth;
 
     if (fullImageLineSizeBytes == sizeBytes) {
         fullImageLineSizeBytes = widthBytes;
@@ -724,7 +729,7 @@ void Interpreter::ImportTextureIA4(int tile, bool importReplacement) {
     uint32_t i = 0;
     for (uint32_t y = 0; y < height; y++) {
         for (uint32_t x = 0; x < width; x++) {
-            uint32_t srcPixelIdx = y * (fullImageLineSizeBytes * 2) + x;
+            uint32_t srcPixelIdx = nibbleOffset + y * (fullImageLineSizeBytes * 2) + x;
             uint8_t byte = addr[srcPixelIdx / 2];
             uint8_t part = (byte >> (4 - (srcPixelIdx % 2) * 4)) & 0xf;
             uint8_t intensity = part >> 1;
@@ -831,6 +836,8 @@ void Interpreter::ImportTextureIA16(int tile, bool importReplacement) {
 }
 
 void Interpreter::ImportTextureI4(int tile, bool importReplacement) {
+    const uint8_t nibbleOffset =
+        mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].nibble_offset;
     const RawTexMetadata* metadata = &mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].raw_tex_metadata;
     const uint8_t* addr =
         importReplacement && (metadata->resource != nullptr)
@@ -850,6 +857,9 @@ void Interpreter::ImportTextureI4(int tile, bool importReplacement) {
                                                mRdp->texture_tile[tile].line_size_bytes);
     uint32_t width = widthBytes * 2;
     uint32_t height = widthBytes > 0 ? sizeBytes / widthBytes : 0;
+    const uint32_t tileWidth = static_cast<uint32_t>(
+        (mRdp->texture_tile[tile].lrs - mRdp->texture_tile[tile].uls + 4) / 4);
+    if (nibbleOffset != 0 && tileWidth > 0 && tileWidth < width) width = tileWidth;
 
     // A single line of pixels should not equal the entire image (height == 1 non-withstanding)
     if (fullImageLineSizeBytes == sizeBytes) {
@@ -860,7 +870,7 @@ void Interpreter::ImportTextureI4(int tile, bool importReplacement) {
 
     for (uint32_t y = 0; y < height; y++) {
         for (uint32_t x = 0; x < width; x++) {
-            uint32_t clrIdx = (y * (fullImageLineSizeBytes * 2)) + (x);
+            uint32_t clrIdx = nibbleOffset + (y * (fullImageLineSizeBytes * 2)) + x;
 
             uint8_t byte = addr[clrIdx / 2];
             uint8_t part = (byte >> (4 - (clrIdx % 2) * 4)) & 0xf;
@@ -921,6 +931,8 @@ void Interpreter::ImportTextureI8(int tile, bool importReplacement) {
 }
 
 void Interpreter::ImportTextureCi4(int tile, bool importReplacement) {
+    const uint8_t nibbleOffset =
+        mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].nibble_offset;
     uint32_t fullImageLineSizeBytes =
         mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].full_image_line_size_bytes;
     const RawTexMetadata* metadata = &mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].raw_tex_metadata;
@@ -961,6 +973,7 @@ void Interpreter::ImportTextureCi4(int tile, bool importReplacement) {
     // skip both. CLAMP wrap mode always opts in.
     uint32_t tile_w = (uint32_t)((mRdp->texture_tile[tile].lrs - mRdp->texture_tile[tile].uls + 4) / 4);
     uint32_t tile_h = (uint32_t)((mRdp->texture_tile[tile].lrt - mRdp->texture_tile[tile].ult + 4) / 4);
+    if (nibbleOffset != 0 && tile_w > 0 && tile_w < width) width = tile_w;
     uint32_t loadedPixels = width * height;
     uint32_t renderedPixels = tile_w * tile_h;
     bool pyramidLike = renderedPixels > 0 && loadedPixels > renderedPixels && loadedPixels * 8 < renderedPixels * 13;
@@ -980,7 +993,7 @@ void Interpreter::ImportTextureCi4(int tile, bool importReplacement) {
     uint32_t i = 0;
     for (uint32_t y = 0; y < height; y++) {
         for (uint32_t x = 0; x < width; x++) {
-            uint32_t srcPixelIdx = y * (fullImageLineSizeBytes * 2) + x;
+            uint32_t srcPixelIdx = nibbleOffset + y * (fullImageLineSizeBytes * 2) + x;
             uint8_t byte = addr[srcPixelIdx / 2];
             uint8_t idx = (byte >> (4 - (srcPixelIdx % 2) * 4)) & 0xf;
             uint16_t col16 = (palette[idx * 2] << 8) | palette[idx * 2 + 1]; // Big endian load
@@ -1264,6 +1277,7 @@ void Interpreter::ImportTexture(int i, int tile, bool importReplacement) {
     uint32_t tmemIdex = mRdp->texture_tile[tile].tmem_index;
     uint8_t paletteIndex = mRdp->texture_tile[tile].palette;
     uint32_t origSizeBytes = mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].orig_size_bytes;
+    uint8_t nibbleOffset = mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].nibble_offset;
 
     const RawTexMetadata* metadata = &mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].raw_tex_metadata;
     const uint8_t* origAddr =
@@ -1293,6 +1307,7 @@ void Interpreter::ImportTexture(int i, int tile, bool importReplacement) {
         }
         tmemIdex = otherTmem;
         origSizeBytes = mRdp->loaded_texture[otherTmem].orig_size_bytes;
+        nibbleOffset = mRdp->loaded_texture[otherTmem].nibble_offset;
         texFlags = mRdp->loaded_texture[otherTmem].tex_flags;
     }
 
@@ -1309,14 +1324,15 @@ void Interpreter::ImportTexture(int i, int tile, bool importReplacement) {
                     fmt,
                     siz,
                     paletteIndex,
-                    origSizeBytes };
+                    origSizeBytes,
+                    nibbleOffset };
         } else {
             // CI8 uses both palette halves
             key = { origAddr,     { mRdp->palette_dram_addr[0], mRdp->palette_dram_addr[1] }, fmt, siz, paletteIndex,
-                    origSizeBytes };
+                    origSizeBytes, nibbleOffset };
         }
     } else {
-        key = { origAddr, {}, fmt, siz, paletteIndex, origSizeBytes };
+        key = { origAddr, {}, fmt, siz, paletteIndex, origSizeBytes, nibbleOffset };
     }
 
     if (TextureCacheLookup(i, key)) {
@@ -2633,6 +2649,7 @@ void Interpreter::GfxDpLoadBlock(uint8_t tile, uint32_t uls, uint32_t ult, uint3
     mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].full_image_line_size_bytes = actual_line_bytes;
     mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].tmem = mRdp->texture_tile[tile].tmem;
     mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].derived_view = false;
+    mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].nibble_offset = 0;
     // assert(size_bytes <= 4096 && "bug: too big texture");
     mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].tex_flags = mRdp->texture_to_load.tex_flags;
     mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].raw_tex_metadata = mRdp->texture_to_load.raw_tex_metadata;
@@ -2689,7 +2706,7 @@ void Interpreter::GfxDpLoadTile(uint8_t tile, uint32_t uls, uint32_t ult, uint32
     switch (mRdp->texture_to_load.siz) {
         case G_IM_SIZ_4b:
             offset_x_in_bytes = offset_x >> 1;
-            tile_line_size_bytes = (tile_width + 1) >> 1;
+            tile_line_size_bytes = ((offset_x & 1) + tile_width + 1) >> 1;
             full_image_line_size_bytes = (full_image_width + 1) >> 1;
             break;
         case G_IM_SIZ_8b:
@@ -2729,6 +2746,8 @@ void Interpreter::GfxDpLoadTile(uint8_t tile, uint32_t uls, uint32_t ult, uint32
     mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].line_size_bytes = tile_line_size_bytes;
     mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].tmem = mRdp->texture_tile[tile].tmem;
     mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].derived_view = false;
+    mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].nibble_offset =
+        mRdp->texture_to_load.siz == G_IM_SIZ_4b ? static_cast<uint8_t>(offset_x & 1) : 0;
 
     //    assert(size_bytes <= 4096 && "bug: too big texture");
     mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index].tex_flags = mRdp->texture_to_load.tex_flags;
@@ -3046,6 +3065,7 @@ void Interpreter::GfxDpImageRectangle(int32_t tile, int32_t w, int32_t h, int32_
     auto& loadtex = mRdp->loaded_texture[mRdp->texture_tile[tile].tmem_index];
     loadtex.full_image_line_size_bytes = loadtex.line_size_bytes = mRdp->texture_tile[tile].line_size_bytes;
     loadtex.size_bytes = loadtex.orig_size_bytes = loadtex.line_size_bytes * h;
+    loadtex.nibble_offset = 0;
 
     uint8_t saved_tile = mRdp->first_tile_index;
     if (saved_tile != tile) {
