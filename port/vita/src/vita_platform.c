@@ -10,6 +10,8 @@
 #include <psp2/audioout.h>
 #include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/threadmgr.h>
+#include <psp2/io/fcntl.h>
+#include <psp2/io/stat.h>
 #include <vita2d.h>
 
 #include <stdio.h>
@@ -30,6 +32,8 @@ static BtgaWorldSummary s_world_summary;
 static bool s_world_ready;
 static uint16_t s_mission_stream_count;
 static uint32_t s_mission_command_count;
+static uint8_t s_mission_index;
+static uint8_t s_highest_unlocked_mission;
 
 typedef struct LoadedFile {
     uint8_t *data;
@@ -53,11 +57,11 @@ static BtgaWorldComponents s_world_components;
 static BtgaWorldComponents s_common_components;
 static BtgaWorldComponents s_spawn_components;
 static BtgaTerrain s_terrain;
-static BtgaTankDefinition s_player_tank;
-static uint16_t s_player_model_indices[BTGA_TANK_MAX_RENDER_PARTS];
-static BtgaTankDefinition s_enemy_tank;
-static uint16_t s_enemy_model_indices[BTGA_TANK_MAX_RENDER_PARTS];
-enum { kMaximumPickups = 64 };
+enum { kTankKindCount = 12 };
+static BtgaTankDefinition s_tanks[kTankKindCount];
+static uint16_t s_tank_model_indices[kTankKindCount][BTGA_TANK_MAX_RENDER_PARTS];
+static bool s_tank_ready[kTankKindCount];
+enum { kMaximumPickups = BTGA_MAX_PICKUPS };
 static BtgaWorldPickup s_pickups[kMaximumPickups];
 static uint16_t s_pickup_model_indices[kMaximumPickups];
 static size_t s_pickup_count;
@@ -126,6 +130,52 @@ enum {
     kAudioOutputRate = 48000,
     kCannonSampleRate = 22050,
 };
+
+static uint32_t save_checksum(const uint8_t *data, size_t size) {
+    uint32_t hash = 2166136261u;
+    size_t index;
+    for (index = 0; index < size; index++) {
+        hash ^= data[index];
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
+static void write_be_u32(uint8_t *destination, uint32_t value) {
+    destination[0] = (uint8_t)(value >> 24);
+    destination[1] = (uint8_t)(value >> 16);
+    destination[2] = (uint8_t)(value >> 8);
+    destination[3] = (uint8_t)value;
+}
+
+static void load_progress(void) {
+    uint8_t data[12];
+    SceUID file = sceIoOpen("ux0:data/VitaTanxGA/save.bin", SCE_O_RDONLY, 0);
+    s_highest_unlocked_mission = 0;
+    if (file < 0) return;
+    if (sceIoRead(file, data, sizeof(data)) == (int)sizeof(data) &&
+        memcmp(data, "VTGA", 4) == 0 && data[4] == 1 && data[5] < 19 &&
+        btga_read_be_u32(data + 8) == save_checksum(data, 8))
+        s_highest_unlocked_mission = data[5];
+    sceIoClose(file);
+}
+
+static bool save_progress(void) {
+    uint8_t data[12] = {'V', 'T', 'G', 'A', 1, 0, 0, 0, 0, 0, 0, 0};
+    SceUID file;
+    data[5] = s_highest_unlocked_mission;
+    write_be_u32(data + 8, save_checksum(data, 8));
+    sceIoMkdir("ux0:data/VitaTanxGA", 0777);
+    file = sceIoOpen("ux0:data/VitaTanxGA/save.bin",
+                     SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
+    if (file < 0) return false;
+    if (sceIoWrite(file, data, sizeof(data)) != (int)sizeof(data)) {
+        sceIoClose(file);
+        return false;
+    }
+    sceIoClose(file);
+    return true;
+}
 
 static const CachedTexture *find_cached_texture(uint32_t texture_offset,
                                                 uint32_t texture_size,
@@ -448,24 +498,19 @@ static bool validate_first_mission(void) {
     return true;
 }
 
-static bool load_campaign_text(void) {
-    return load_file("app0:assets/campaign/campaign_text.bin",
-                     &s_campaign_text_file) &&
+static bool load_campaign_text(uint8_t mission) {
+    if (s_campaign_text_file.data == NULL &&
+        !load_file("app0:assets/campaign/campaign_text.bin",
+                   &s_campaign_text_file)) return false;
+    return
            btga_campaign_mission_text(s_campaign_text_file.data,
-                                      s_campaign_text_file.size, 0,
+                                      s_campaign_text_file.size, mission,
                                       &s_mission_text);
 }
 
-static bool load_first_world(void) {
-    static const char *const paths[7] = {
-        "app0:assets/worlds/level_world_127/component0.bin",
-        "app0:assets/worlds/level_world_127/component1.bin",
-        "app0:assets/worlds/level_world_127/component2.bin",
-        "app0:assets/worlds/level_world_127/component3.bin",
-        "app0:assets/worlds/level_world_127/component4.bin",
-        "app0:assets/worlds/level_world_127/component5.bin",
-        "app0:assets/worlds/level_world_127/component6.bin",
-    };
+static bool load_mission_world(uint8_t mission) {
+    uint8_t geometry_world;
+    uint8_t spawn_world;
     static const char *const common_paths[7] = {
         "app0:assets/worlds/common_world/component0.bin",
         "app0:assets/worlds/common_world/component1.bin",
@@ -475,22 +520,25 @@ static bool load_first_world(void) {
         "app0:assets/worlds/common_world/component5.bin",
         "app0:assets/worlds/common_world/component6.bin",
     };
-    static const char *const spawn_paths[7] = {
-        "app0:assets/worlds/level_world_131/component0.bin",
-        "app0:assets/worlds/level_world_131/component1.bin",
-        "app0:assets/worlds/level_world_131/component2.bin",
-        "app0:assets/worlds/level_world_131/component3.bin",
-        "app0:assets/worlds/level_world_131/component4.bin",
-        "app0:assets/worlds/level_world_131/component5.bin",
-        "app0:assets/worlds/level_world_131/component6.bin",
-    };
     bool valid = false;
     unsigned int index;
 
+    if (!btga_campaign_worlds(mission, &geometry_world, &spawn_world))
+        return false;
     for (index = 0; index < 7; index++) {
-        if (!load_file(paths[index], &s_world_files[index]) ||
+        char world_path[96];
+        char spawn_path[96];
+        int world_length = snprintf(world_path, sizeof(world_path),
+            "app0:assets/worlds/level_world_%03u/component%u.bin",
+            geometry_world, index);
+        int spawn_length = snprintf(spawn_path, sizeof(spawn_path),
+            "app0:assets/worlds/level_world_%03u/component%u.bin",
+            spawn_world, index);
+        if (world_length < 0 || (size_t)world_length >= sizeof(world_path) ||
+            spawn_length < 0 || (size_t)spawn_length >= sizeof(spawn_path) ||
+            !load_file(world_path, &s_world_files[index]) ||
             !load_file(common_paths[index], &s_common_files[index]) ||
-            !load_file(spawn_paths[index], &s_spawn_files[index])) goto cleanup;
+            !load_file(spawn_path, &s_spawn_files[index])) goto cleanup;
     }
     if (!load_file("app0:assets/world-pools/geometry.bin", &s_geometry_pool) ||
         !load_file("app0:assets/world-pools/state.bin", &s_state_pool) ||
@@ -536,26 +584,26 @@ static bool load_first_world(void) {
                                    s_geometry_pool.size, &bounds, &s_terrain) &&
                 build_texture_cache() &&
                 load_projectile_textures() &&
-                btga_tank_definition(s_gameplay_data.data, s_gameplay_data.size,
-                                     0, &s_player_tank) &&
                 btga_campaign_mission_config(s_campaign_config_file.data,
-                                             s_campaign_config_file.size, 0,
-                                             &s_mission_config) &&
-                btga_tank_definition(s_gameplay_data.data, s_gameplay_data.size,
-                                     4, &s_enemy_tank);
-        for (index = 0; valid && index < s_player_tank.part_count; index++) {
-            valid = btga_common_model_index(&s_common_components,
-                                            s_player_tank.parts[index].model_id,
-                                            &s_player_model_indices[index]) &&
-                    cache_model_textures(&s_common_components,
-                                         s_player_model_indices[index], 0);
-        }
-        for (index = 0; valid && index < s_enemy_tank.part_count; index++) {
-            valid = btga_common_model_index(&s_common_components,
-                                            s_enemy_tank.parts[index].model_id,
-                                            &s_enemy_model_indices[index]) &&
-                    cache_model_textures(&s_common_components,
-                                         s_enemy_model_indices[index], 0);
+                                             s_campaign_config_file.size, mission,
+                                             &s_mission_config);
+        memset(s_tank_ready, 0, sizeof(s_tank_ready));
+        for (index = 0; valid && index < BTGA_CAMPAIGN_SLOT_COUNT; index++) {
+            uint8_t kind = (uint8_t)s_mission_config.tank_kinds[index];
+            unsigned int part;
+            if (kind >= kTankKindCount || s_tank_ready[kind]) continue;
+            valid = btga_tank_definition(s_gameplay_data.data,
+                                         s_gameplay_data.size, kind,
+                                         &s_tanks[kind]);
+            for (part = 0; valid && part < s_tanks[kind].part_count; part++)
+                valid = btga_common_model_index(
+                            &s_common_components,
+                            s_tanks[kind].parts[part].model_id,
+                            &s_tank_model_indices[kind][part]) &&
+                        cache_model_textures(
+                            &s_common_components,
+                            s_tank_model_indices[kind][part], 0);
+            if (valid) s_tank_ready[kind] = true;
         }
         valid = valid && btga_world_pickups(&s_spawn_components, s_pickups,
                                             kMaximumPickups, &s_pickup_count);
@@ -577,7 +625,10 @@ static bool load_first_world(void) {
                                                 s_pickup_model_indices[index]);
         }
     }
-    if (valid) return true;
+    if (valid) {
+        s_mission_index = mission;
+        return true;
+    }
 cleanup:
     for (index = 0; index < s_texture_cache_count; index++)
         vita2d_free_texture(s_texture_cache[index].texture);
@@ -832,16 +883,16 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
     draw.actor = true;
     draw.team_color_active = btga_campaign_team_color(0, &draw.team_color);
     draw.material_cached = false;
-    for (tank_part = 0; tank_part < s_player_tank.part_count; tank_part++) {
+    for (tank_part = 0; tank_part < s_tanks[0].part_count; tank_part++) {
         float part_turn = runtime->player.yaw;
         uint16_t part_yaw;
-        if (s_player_tank.parts[tank_part].turret_transform)
+        if (s_tanks[0].parts[tank_part].turret_transform)
             part_turn += runtime->player.turret_yaw;
         part_turn = fmodf(part_turn, 6.28318530718f);
         if (part_turn < 0.0f) part_turn += 6.28318530718f;
         part_yaw = (uint16_t)(part_turn * (65536.0f / 6.28318530718f));
         if (!btga_model_visit(&s_common_components,
-                              s_player_model_indices[tank_part], 0,
+                              s_tank_model_indices[0][tank_part], 0,
                               runtime->player.x, runtime->player.y, runtime->player.z,
                               part_yaw, s_geometry_pool.data, s_geometry_pool.size,
                               1000, draw_world_triangle, &draw, &tank_triangles)) return 0;
@@ -854,9 +905,12 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
         draw.team_color_active = btga_campaign_team_color(enemy->team,
                                                           &draw.team_color);
         draw.material_cached = false;
-        tank = enemy->tank_kind == 4 ? &s_enemy_tank : &s_player_tank;
-        model_indices = enemy->tank_kind == 4 ? s_enemy_model_indices :
-                                                s_player_model_indices;
+        tank = enemy->tank_kind < kTankKindCount &&
+               s_tank_ready[enemy->tank_kind]
+            ? &s_tanks[enemy->tank_kind] : &s_tanks[0];
+        model_indices = enemy->tank_kind < kTankKindCount &&
+                        s_tank_ready[enemy->tank_kind]
+            ? s_tank_model_indices[enemy->tank_kind] : s_tank_model_indices[0];
         for (tank_part = 0; tank_part < tank->part_count; tank_part++) {
             float part_turn = enemy->yaw;
             uint16_t part_yaw;
@@ -970,6 +1024,7 @@ static uint32_t map_buttons(uint32_t buttons) {
 }
 
 bool vita_platform_startup(void) {
+    load_progress();
     sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG);
     if (vita2d_init() < 0) {
         return false;
@@ -979,10 +1034,49 @@ bool vita_platform_startup(void) {
         vita2d_fini();
         return false;
     }
-    s_world_ready = load_first_world() && validate_first_mission() &&
-                    load_campaign_text();
+    s_world_ready = load_mission_world(0) && validate_first_mission() &&
+                    load_campaign_text(0);
     if (s_world_ready) s_world_ready = audio_start();
     return true;
+}
+
+bool vita_platform_load_mission(uint8_t mission) {
+    unsigned int index;
+    if (mission >= 19 || mission == s_mission_index) return mission < 19;
+    for (index = 0; index < s_texture_cache_count; index++)
+        vita2d_free_texture(s_texture_cache[index].texture);
+    s_texture_cache_count = 0;
+    for (index = 0; index < 3; index++) {
+        if (s_projectile_textures[index].texture != NULL)
+            vita2d_free_texture(s_projectile_textures[index].texture);
+        s_projectile_textures[index] = (CachedTexture){0};
+    }
+    for (index = 0; index < 7; index++) {
+        free(s_world_files[index].data); s_world_files[index] = (LoadedFile){0};
+        free(s_common_files[index].data); s_common_files[index] = (LoadedFile){0};
+        free(s_spawn_files[index].data); s_spawn_files[index] = (LoadedFile){0};
+    }
+    free(s_geometry_pool.data); s_geometry_pool = (LoadedFile){0};
+    free(s_state_pool.data); s_state_pool = (LoadedFile){0};
+    free(s_texture_pool.data); s_texture_pool = (LoadedFile){0};
+    free(s_gameplay_data.data); s_gameplay_data = (LoadedFile){0};
+    free(s_campaign_config_file.data); s_campaign_config_file = (LoadedFile){0};
+    s_pickup_count = 0;
+    s_world_ready = load_mission_world(mission) && load_campaign_text(mission);
+    return s_world_ready;
+}
+
+uint8_t vita_platform_mission(void) { return s_mission_index; }
+
+uint8_t vita_platform_highest_unlocked_mission(void) {
+    return s_highest_unlocked_mission;
+}
+
+bool vita_platform_complete_mission(uint8_t mission) {
+    uint8_t unlocked = mission < 18 ? (uint8_t)(mission + 1) : 18;
+    if (unlocked <= s_highest_unlocked_mission) return true;
+    s_highest_unlocked_mission = unlocked;
+    return save_progress();
 }
 
 bool vita_platform_assets_ready(void) {
@@ -1018,7 +1112,8 @@ bool vita_platform_pickup(size_t index, BtgaWorldPickup *pickup) {
 }
 
 bool vita_platform_intro_script(const uint8_t **data, size_t *size) {
-    if (data == NULL || size == NULL || s_intro_stream.data == NULL) return false;
+    if (data == NULL || size == NULL || s_mission_index != 0 ||
+        s_intro_stream.data == NULL) return false;
     *data = s_intro_stream.data;
     *size = s_intro_stream.size;
     return true;
@@ -1138,15 +1233,19 @@ void vita_platform_draw(const BtgaRuntime *runtime) {
         vita2d_pgf_draw_text(s_font, 90, 211, kColorOrange, 0.95f,
                              "BattleTanx: Global Assault");
         vita2d_pgf_draw_text(s_font, 90, 300, kColorGray, 0.78f,
-                             "CROSS: start");
+                             "LEFT/RIGHT: mission   CROSS: deploy");
+        vita2d_pgf_draw_textf(s_font, 90, 326, kColorOrange, 0.70f,
+                              "CAMPAIGN MISSION %u/19 - %s",
+                              (unsigned int)s_mission_index + 1,
+                              s_mission_text.location.text);
         if (world != NULL) {
-            vita2d_pgf_draw_textf(s_font, 90, 350, kColorGray, 0.66f,
+            vita2d_pgf_draw_textf(s_font, 90, 362, kColorGray, 0.66f,
                                   "Loaded: %lu placements, %lu models",
                                   (unsigned long)world->placement_count,
                                   (unsigned long)world->model_count);
         }
         if (s_mission_stream_count != 0) {
-            vita2d_pgf_draw_textf(s_font, 90, 376, kColorGray, 0.60f,
+            vita2d_pgf_draw_textf(s_font, 90, 388, kColorGray, 0.60f,
                                   "Mission data: %u streams, %lu commands",
                                   s_mission_stream_count,
                                   (unsigned long)s_mission_command_count);
@@ -1186,6 +1285,12 @@ void vita_platform_draw(const BtgaRuntime *runtime) {
                 s_font, 18, 100, kColorWhite, 0.52f, "%s x%u",
                 btga_runtime_weapon_name(runtime->player.selected_weapon),
                 runtime->weapon_ammo[runtime->player.selected_weapon]);
+        if (runtime->player.turbo_ticks != 0)
+            vita2d_pgf_draw_textf(s_font, 750, 52, kColorOrange, 0.52f,
+                                  "TURBO %u", runtime->player.turbo_ticks);
+        if (runtime->player.cloak_ticks != 0)
+            vita2d_pgf_draw_textf(s_font, 750, 74, kColorOrange, 0.52f,
+                                  "CLOAK %u", runtime->player.cloak_ticks);
         if (runtime->pickup_message_ticks != 0)
             vita2d_pgf_draw_textf(s_font, 330, 500, kColorOrange, 0.72f,
                                   "PICKED UP %s",
@@ -1200,8 +1305,10 @@ void vita_platform_draw(const BtgaRuntime *runtime) {
         const char *result = runtime->screen == BTGA_SCREEN_VICTORY
             ? "MISSION COMPLETE" : "TANK DESTROYED";
         vita2d_pgf_draw_text(s_font, 300, 238, kColorWhite, 1.2f, result);
-        vita2d_pgf_draw_text(s_font, 350, 292, kColorGray, 0.65f,
-                             "CIRCLE: return to title");
+        vita2d_pgf_draw_text(s_font, 286, 292, kColorGray, 0.65f,
+            runtime->screen == BTGA_SCREEN_VICTORY
+                ? "CROSS: next mission   CIRCLE: title"
+                : "CIRCLE: return to title");
     }
 }
 

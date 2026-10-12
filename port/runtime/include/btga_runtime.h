@@ -54,6 +54,8 @@ typedef struct BtgaPlayer {
     uint16_t max_ammo;
     uint16_t shield;
     uint16_t tank_bucks;
+    uint16_t turbo_ticks;
+    uint16_t cloak_ticks;
     uint8_t fire_cooldown;
     uint8_t secondary_cooldown;
     uint8_t selected_weapon;
@@ -68,9 +70,11 @@ typedef struct BtgaProjectile {
     float velocity_z;
     uint16_t lifetime;
     uint16_t damage;
+    uint16_t blast_radius;
     uint8_t owner;
     uint8_t team;
     uint8_t weapon;
+    bool homing;
     bool active;
 } BtgaProjectile;
 
@@ -99,7 +103,7 @@ typedef struct BtgaPickup {
 enum {
     BTGA_MAX_PROJECTILES = 32,
     BTGA_MAX_ENEMIES = 20,
-    BTGA_MAX_PICKUPS = 64,
+    BTGA_MAX_PICKUPS = 160,
     BTGA_PICKUP_KIND_COUNT = 20,
     BTGA_WEAPON_COUNT = 18,
 };

@@ -102,6 +102,13 @@ int main(void) {
     btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US);
     assert(runtime.weapon_ammo[2] == 4);
     assert(runtime.player.secondary_cooldown != 0);
+    {
+        unsigned int swarmer_count = 0;
+        for (index = 0; index < BTGA_MAX_PROJECTILES; index++)
+            if (runtime.projectiles[index].active &&
+                runtime.projectiles[index].weapon == 2) swarmer_count++;
+        assert(swarmer_count == 3);
+    }
     input = (BtgaInput){.pressed = BTGA_BUTTON_SELECT};
     btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US);
     assert(runtime.player.selected_weapon == 16);

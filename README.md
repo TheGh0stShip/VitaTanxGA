@@ -27,12 +27,13 @@ The repository currently produces an installable PS Vita VPK that:
   PCM result through a dedicated Vita audio thread when a shot is created;
 - resolves and renders the player's original tank asset through the recovered
   shared model-ID table, including body, turret, treads, and detail layers;
-- loads the campaign dispatcher-selected SF Airport world/actor pair rather
-  than the unrelated multiplayer pair previously used;
-- parses the retail campaign setup record and applies its one-player slot
-  reorder, creating SF Airport's three configured hostile tank-kind-4 actors
-  at spawn slots 2, 3, and 4 instead of activating every placement marker;
-- renders those enemies with their own recovered six-part vehicle definition,
+- maps all 19 campaign records through the recovered retail asset dispatcher,
+  loading each mission's extracted geometry and actor/spawn world pair;
+- provides campaign mission selection and completion progression persisted at
+  `ux0:data/VitaTanxGA/save.bin`, while preserving explicit serialized widths;
+- applies each retail campaign setup record's one-player slot reorder and
+  configured tank kinds/teams instead of activating every placement marker;
+- renders those enemies with their recovered per-kind vehicle definitions,
   retail campaign team colors, independently tracking turret parts, steering,
   pursuit, firing along the turret heading, projectile ownership, hit detection,
   damage, and enemy-only mission completion;
@@ -40,8 +41,8 @@ The repository currently produces an installable PS Vita VPK that:
   recovered pickup-kind/model table and original textured common-world models,
   with retail health, ammunition, weapon inventory, tank-buck, and radar effects;
 - derives navigation heights from the placed retail level geometry;
-- loads and validates the first extracted world's big-endian component tables;
-- packages only runtime-opened decoded worlds, shared world pools, projectile
+- loads and validates extracted big-endian world component tables;
+- packages the campaign worlds, shared world pools, projectile
   sprites, the decoded cannon effect, mission scripts, and original campaign
   text/configuration tables;
 - presents the recovered San Francisco Airport location, objective, and full
@@ -51,9 +52,9 @@ The repository currently produces an installable PS Vita VPK that:
   narrative with original 30 Hz waits on the portable runtime boundary;
 - validates the executable and code-bearing libraries for ABI consistency.
 
-This is an **early runtime port**, not yet the complete game. Retail enemy and
-object behavior, execution of the remaining mission commands, complete weapon rules, remaining sound effects and music,
-the complete frontend, saving, and remaining platform services are still being
+This is an **in-progress runtime port**, not yet the complete game. Execution
+of world-object/camera mission commands, remaining object behavior, remaining
+sound effects and music, and additional frontend services are still being
 ported from the recovered implementation.
 
 ## Windows Vita3K captures

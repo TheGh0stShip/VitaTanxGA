@@ -4,8 +4,17 @@
 #include <string.h>
 
 int btga_campaign_tests(void) {
+    static const uint8_t expected_geometry[19] = {
+        127, 0, 5, 11, 20, 25, 31, 38, 45, 51,
+        57, 61, 68, 80, 74, 86, 123, 94, 100,
+    };
+    static const uint8_t expected_spawns[19] = {
+        131, 3, 9, 17, 23, 30, 36, 43, 49, 55,
+        60, 66, 72, 84, 78, 92, 123, 98, 103,
+    };
     uint8_t data[0xCF0] = {0};
     BtgaMissionText text;
+    size_t index;
     memcpy(data, "-SF AIRPORT-", 12);
     memcpy(data + 0x17C, "DESTROY ALL INVADING TANKS", 26);
     memcpy(data + 0x49C, "Unknown enemy forces", 20);
@@ -47,5 +56,12 @@ int btga_campaign_tests(void) {
         assert(!btga_campaign_mission_config(configs, sizeof(configs) - 1, 0,
                                              &config));
     }
+    for (index = 0; index < 19; index++) {
+        uint8_t geometry, spawns;
+        assert(btga_campaign_worlds((uint8_t)index, &geometry, &spawns));
+        assert(geometry == expected_geometry[index]);
+        assert(spawns == expected_spawns[index]);
+    }
+    assert(!btga_campaign_worlds(19, &data[0], &data[1]));
     return 0;
 }

@@ -14,9 +14,38 @@ static float clampf(float value, float minimum, float maximum) {
     return value;
 }
 
+static void damage_enemy(BtgaEnemy *enemy, uint16_t damage) {
+    if (enemy == NULL || !enemy->active || enemy->allied) return;
+    enemy->health = enemy->health > damage ?
+        (uint16_t)(enemy->health - damage) : 0;
+    if (enemy->health == 0) enemy->active = false;
+}
+
+static void damage_enemies_in_radius(BtgaRuntime *runtime, float x, float z,
+                                     uint16_t radius, uint16_t damage) {
+    unsigned int index;
+    float radius_squared = (float)radius * (float)radius;
+    for (index = 0; index < BTGA_MAX_ENEMIES; index++) {
+        BtgaEnemy *enemy = &runtime->enemies[index];
+        float dx = x - enemy->x;
+        float dz = z - enemy->z;
+        if (enemy->active && !enemy->allied &&
+            dx * dx + dz * dz <= radius_squared)
+            damage_enemy(enemy, damage);
+    }
+}
+
+static uint16_t radians_to_yaw(float angle) {
+    float turns = fmodf(angle, 6.28318530718f);
+    if (turns < 0.0f) turns += 6.28318530718f;
+    return (uint16_t)(turns * (65536.0f / 6.28318530718f));
+}
+
 static bool spawn_projectile(BtgaRuntime *runtime, float x, float y, float z,
                              float heading, uint8_t owner, uint8_t team,
-                             uint8_t weapon, uint16_t damage, float speed) {
+                             uint8_t weapon, uint16_t damage, float speed,
+                             uint16_t lifetime, uint16_t blast_radius,
+                             bool homing) {
     unsigned int index;
     for (index = 0; index < BTGA_MAX_PROJECTILES; index++) {
         BtgaProjectile *projectile = &runtime->projectiles[index];
@@ -26,11 +55,13 @@ static bool spawn_projectile(BtgaRuntime *runtime, float x, float y, float z,
         projectile->z = z + cosf(heading) * 55.0f;
         projectile->velocity_x = sinf(heading) * speed;
         projectile->velocity_z = cosf(heading) * speed;
-        projectile->lifetime = 75;
+        projectile->lifetime = lifetime;
         projectile->damage = damage;
+        projectile->blast_radius = blast_radius;
         projectile->owner = owner;
         projectile->team = team;
         projectile->weapon = weapon;
+        projectile->homing = homing;
         projectile->active = true;
         if (weapon == 1) runtime->cannon_sound_serial++;
         return true;
@@ -79,18 +110,92 @@ static void cycle_weapon(BtgaRuntime *runtime) {
 
 static void fire_secondary(BtgaRuntime *runtime) {
     uint8_t weapon = runtime->player.selected_weapon;
-    float speed = 80.0f;
-    uint16_t damage = 30;
+    float heading = runtime->player.yaw + runtime->player.turret_yaw;
+    bool fired = false;
     if (weapon < 2 || weapon >= BTGA_WEAPON_COUNT ||
         runtime->weapon_ammo[weapon] == 0 ||
         runtime->player.secondary_cooldown != 0) return;
-    if (weapon == 4) { speed = 25.0f; damage = 70; }
-    else if (weapon == 7) { speed = 45.0f; damage = 100; }
-    else if (weapon == 9) { speed = 100.0f; damage = 15; }
-    if (!spawn_projectile(runtime, runtime->player.x, runtime->player.y,
-                          runtime->player.z,
-                          runtime->player.yaw + runtime->player.turret_yaw,
-                          0, 0, weapon, damage, speed)) return;
+    switch (weapon) {
+        case 2: {
+            unsigned int shot;
+            static const float spread[3] = {-0.10f, 0.0f, 0.10f};
+            for (shot = 0; shot < 3; shot++)
+                fired |= spawn_projectile(runtime, runtime->player.x,
+                    runtime->player.y, runtime->player.z, heading + spread[shot],
+                    0, 0, weapon, 30, 80.0f, 75, 0, false);
+            break;
+        }
+        case 3:
+            fired = spawn_projectile(runtime, runtime->player.x, runtime->player.y,
+                runtime->player.z, heading, 0, 0, weapon, 35, 180.0f,
+                45, 0, false);
+            break;
+        case 4:
+            fired = spawn_projectile(runtime, runtime->player.x, runtime->player.y,
+                runtime->player.z, heading, 0, 0, weapon, 70, 25.0f,
+                180, 0, true);
+            break;
+        case 6: case 15:
+            fired = spawn_projectile(runtime, runtime->player.x,
+                runtime->player.y, runtime->player.z, heading + 3.14159265359f,
+                0, 0, weapon, weapon == 6 ? 50 : 35, 0.0f,
+                900, weapon == 6 ? 120 : 90, false);
+            break;
+        case 7:
+            fired = spawn_projectile(runtime, runtime->player.x, runtime->player.y,
+                runtime->player.z, heading, 0, 0, weapon, 100, 45.0f,
+                120, 600, false);
+            break;
+        case 8: {
+            float distance = 600.0f;
+            runtime->player.x = clampf(runtime->player.x + sinf(heading) * distance,
+                                       runtime->world_min_x, runtime->world_max_x);
+            runtime->player.z = clampf(runtime->player.z + cosf(heading) * distance,
+                                       runtime->world_min_z, runtime->world_max_z);
+            fired = true;
+            break;
+        }
+        case 9: {
+            unsigned int shot;
+            static const float spread[3] = {-0.08f, 0.0f, 0.08f};
+            for (shot = 0; shot < 3; shot++)
+                fired |= spawn_projectile(runtime, runtime->player.x,
+                    runtime->player.y, runtime->player.z, heading + spread[shot],
+                    0, 0, weapon, 15, 100.0f, 65, 0, false);
+            break;
+        }
+        case 10: runtime->player.turbo_ticks += 105; fired = true; break;
+        case 11:
+            runtime->player.ammo = runtime->player.ammo + 15u >
+                runtime->player.max_ammo ? runtime->player.max_ammo :
+                (uint16_t)(runtime->player.ammo + 15u);
+            fired = true;
+            break;
+        case 12:
+            fired = spawn_projectile(runtime, runtime->player.x, runtime->player.y,
+                runtime->player.z, heading, 0, 0, weapon, 8, 55.0f,
+                18, 70, false);
+            break;
+        case 13: runtime->player.cloak_ticks += 450; fired = true; break;
+        case 14:
+            fired = spawn_projectile(runtime, runtime->player.x, runtime->player.y,
+                runtime->player.z, heading, 0, 0, weapon, 50, 60.0f,
+                90, 140, false);
+            break;
+        case 16:
+            fired = btga_runtime_add_ally(runtime,
+                runtime->player.x - sinf(heading) * 100.0f,
+                runtime->player.y,
+                runtime->player.z - cosf(heading) * 100.0f,
+                radians_to_yaw(heading));
+            break;
+        default:
+            fired = spawn_projectile(runtime, runtime->player.x, runtime->player.y,
+                runtime->player.z, heading, 0, 0, weapon, 30, 80.0f,
+                75, 0, false);
+            break;
+    }
+    if (!fired) return;
     runtime->weapon_ammo[weapon]--;
     runtime->player.secondary_cooldown = btga_runtime_weapon_cooldown(weapon);
     if (runtime->weapon_ammo[weapon] == 0) cycle_weapon(runtime);
@@ -112,6 +217,8 @@ static void update_enemies(BtgaRuntime *runtime) {
         float target_z = runtime->player.z;
         unsigned int target_index;
         if (!enemy->active) continue;
+        if (!enemy->allied && runtime->player.cloak_ticks != 0 &&
+            btga_runtime_active_allies(runtime) == 0) continue;
         if (enemy->allied) {
             float best = 1.0e30f;
             bool found = false;
@@ -179,7 +286,8 @@ static void update_enemies(BtgaRuntime *runtime) {
             if (spawn_projectile(runtime, enemy->x, enemy->y, enemy->z,
                                  enemy->yaw + enemy->turret_yaw,
                                  (uint8_t)(index + 1),
-                                 enemy->allied ? 0 : 1, 1, 30, 95.0f))
+                                 enemy->allied ? 0 : 1, 1, 30, 95.0f,
+                                 75, 0, false))
                 enemy->fire_cooldown = 45;
         }
     }
@@ -189,12 +297,15 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
                             uint32_t pressed) {
     float throttle = -(float)input->move_y / 32768.0f;
     float steering = (float)input->move_x / 32768.0f;
-    float target_velocity = throttle * 42.0f;
+    float target_velocity = throttle *
+        (runtime->player.turbo_ticks != 0 ? 67.0f : 42.0f);
     float follow_x;
     float follow_y;
     float follow_z;
     unsigned int index;
     if (runtime->pickup_message_ticks != 0) runtime->pickup_message_ticks--;
+    if (runtime->player.turbo_ticks != 0) runtime->player.turbo_ticks--;
+    if (runtime->player.cloak_ticks != 0) runtime->player.cloak_ticks--;
     runtime->player.yaw += steering * (0.018f + fabsf(throttle) * 0.032f);
     runtime->player.turret_yaw += (float)input->aim_x / 32768.0f * 0.055f;
     runtime->player.velocity += (target_velocity - runtime->player.velocity) * 0.16f;
@@ -218,7 +329,7 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
         if (spawn_projectile(runtime, runtime->player.x, runtime->player.y,
                              runtime->player.z,
                              runtime->player.yaw + runtime->player.turret_yaw,
-                             0, 0, 1, 30, 95.0f)) {
+                             0, 0, 1, 30, 95.0f, 75, 0, false)) {
             runtime->player.ammo--;
             runtime->player.fire_cooldown = 8;
         }
@@ -272,6 +383,45 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
     for (index = 0; index < BTGA_MAX_PROJECTILES; index++) {
         BtgaProjectile *projectile = &runtime->projectiles[index];
         if (!projectile->active) continue;
+        if (projectile->homing && projectile->team == 0) {
+            BtgaEnemy *target = NULL;
+            float best = 1.0e30f;
+            unsigned int enemy_index;
+            for (enemy_index = 0; enemy_index < BTGA_MAX_ENEMIES;
+                 enemy_index++) {
+                BtgaEnemy *candidate = &runtime->enemies[enemy_index];
+                float dx, dz, squared;
+                if (!candidate->active || candidate->allied) continue;
+                dx = candidate->x - projectile->x;
+                dz = candidate->z - projectile->z;
+                squared = dx * dx + dz * dz;
+                if (squared < best) {
+                    best = squared;
+                    target = candidate;
+                }
+            }
+            if (target != NULL && best > 0.0001f) {
+                float speed = sqrtf(projectile->velocity_x *
+                                    projectile->velocity_x +
+                                    projectile->velocity_z *
+                                    projectile->velocity_z);
+                float inverse_distance = 1.0f / sqrtf(best);
+                float desired_x = (target->x - projectile->x) *
+                                  inverse_distance * speed;
+                float desired_z = (target->z - projectile->z) *
+                                  inverse_distance * speed;
+                float blended_x = projectile->velocity_x * 0.88f +
+                                  desired_x * 0.12f;
+                float blended_z = projectile->velocity_z * 0.88f +
+                                  desired_z * 0.12f;
+                float blended_length = sqrtf(blended_x * blended_x +
+                                             blended_z * blended_z);
+                if (blended_length > 0.0001f) {
+                    projectile->velocity_x = blended_x * speed / blended_length;
+                    projectile->velocity_z = blended_z * speed / blended_length;
+                }
+            }
+        }
         projectile->x += projectile->velocity_x;
         projectile->z += projectile->velocity_z;
         if (projectile->team == 0) {
@@ -282,9 +432,11 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
                 float dz = projectile->z - enemy->z;
                 if (enemy->active && !enemy->allied &&
                     dx * dx + dz * dz < 2500.0f) {
-                    enemy->health = enemy->health > projectile->damage
-                        ? enemy->health - projectile->damage : 0;
-                    if (enemy->health == 0) enemy->active = false;
+                    if (projectile->blast_radius != 0)
+                        damage_enemies_in_radius(runtime, projectile->x,
+                            projectile->z, projectile->blast_radius,
+                            projectile->damage);
+                    else damage_enemy(enemy, projectile->damage);
                     projectile->active = false;
                     break;
                 }
@@ -324,7 +476,12 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
         if (!projectile->active) continue;
         if (--projectile->lifetime == 0 || projectile->x < runtime->world_min_x ||
             projectile->x > runtime->world_max_x || projectile->z < runtime->world_min_z ||
-            projectile->z > runtime->world_max_z) projectile->active = false;
+            projectile->z > runtime->world_max_z) {
+            if (projectile->team == 0 && projectile->blast_radius != 0)
+                damage_enemies_in_radius(runtime, projectile->x, projectile->z,
+                    projectile->blast_radius, projectile->damage);
+            projectile->active = false;
+        }
     }
     follow_x = runtime->player.x - sinf(runtime->player.yaw) * 330.0f;
     follow_y = runtime->player.y + 180.0f;
@@ -458,6 +615,8 @@ void btga_runtime_restart_mission(BtgaRuntime *runtime) {
     runtime->player.tank_bucks = 0;
     runtime->player.fire_cooldown = 0;
     runtime->player.secondary_cooldown = 0;
+    runtime->player.turbo_ticks = 0;
+    runtime->player.cloak_ticks = 0;
     runtime->player.selected_weapon = 0;
     runtime->player.radar = false;
     for (index = 0; index < BTGA_MAX_PROJECTILES; index++)

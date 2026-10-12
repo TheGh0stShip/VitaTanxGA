@@ -56,6 +56,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
   SceGxm_stub
   SceCommonDialog_stub
   SceAppMgr_stub
+  SceIofilemgr_stub
   ScePgf_stub
   SceShaccCg_stub
   png
@@ -83,21 +84,26 @@ set(VITA_GAME_FILES
   "${VITA_ASSET_ROOT}/audio/cannon.pcm16le"
   "${VITA_ASSET_ROOT}/campaign/campaign_text.bin"
   "${VITA_ASSET_ROOT}/campaign/campaign_config.bin"
-  "${VITA_ASSET_ROOT}/scripts/script_00_514720/header.bin"
 )
 file(GLOB VITA_COMMON_WORLD_FILES CONFIGURE_DEPENDS
   "${VITA_ASSET_ROOT}/worlds/common_world/component*.bin")
-file(GLOB VITA_LEVEL_WORLD_FILES CONFIGURE_DEPENDS
-  "${VITA_ASSET_ROOT}/worlds/level_world_127/component*.bin")
-file(GLOB VITA_SPAWN_WORLD_FILES CONFIGURE_DEPENDS
-  "${VITA_ASSET_ROOT}/worlds/level_world_131/component*.bin")
-file(GLOB VITA_MISSION_STREAM_FILES CONFIGURE_DEPENDS
-  "${VITA_ASSET_ROOT}/scripts/script_00_514720/stream_*.bin")
+set(VITA_CAMPAIGN_WORLD_IDS
+  000 003 005 009 011 017 020 023 025 030 031 036 038 043 045 049
+  051 055 057 060 061 066 068 072 074 078 080 084 086 092 094 098
+  100 103 123 127 131)
+set(VITA_CAMPAIGN_WORLD_FILES)
+foreach(world_id IN LISTS VITA_CAMPAIGN_WORLD_IDS)
+  file(GLOB mission_world_files CONFIGURE_DEPENDS
+    "${VITA_ASSET_ROOT}/worlds/level_world_${world_id}/component*.bin")
+  list(APPEND VITA_CAMPAIGN_WORLD_FILES ${mission_world_files})
+endforeach()
+file(GLOB_RECURSE VITA_MISSION_SCRIPT_FILES CONFIGURE_DEPENDS
+  "${VITA_ASSET_ROOT}/scripts/script_*/header.bin"
+  "${VITA_ASSET_ROOT}/scripts/script_*/stream_*.bin")
 list(APPEND VITA_GAME_FILES
   ${VITA_COMMON_WORLD_FILES}
-  ${VITA_LEVEL_WORLD_FILES}
-  ${VITA_SPAWN_WORLD_FILES}
-  ${VITA_MISSION_STREAM_FILES}
+  ${VITA_CAMPAIGN_WORLD_FILES}
+  ${VITA_MISSION_SCRIPT_FILES}
 )
 foreach(asset IN LISTS VITA_GAME_FILES)
   if(NOT EXISTS "${asset}")

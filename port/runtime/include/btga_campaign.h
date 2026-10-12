@@ -37,5 +37,7 @@ bool btga_campaign_mission_text(const uint8_t *data, size_t size,
 bool btga_campaign_mission_config(const uint8_t *data, size_t size,
                                   uint8_t mission, BtgaMissionConfig *config);
 bool btga_campaign_team_color(uint8_t team, BtgaTeamColor *color);
+bool btga_campaign_worlds(uint8_t mission, uint8_t *geometry_world,
+                          uint8_t *spawn_world);
 
 #endif

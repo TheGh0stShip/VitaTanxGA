@@ -37,7 +37,7 @@ Those generated files are packaged under `app0:assets/`; the ROM itself is
 never packaged or committed. The executable runs a bounded 30 Hz fixed-step
 simulation, maps Vita controls to portable button/analog state, and lets the
 runtime select decoded packaged assets without depending on Vita APIs. It
-also reads the first world's split component files, decodes their big-endian
+also reads each selected campaign world's split component files, decodes its big-endian
 fields explicitly, validates table and pool ranges, interprets the referenced
 F3DEX2 vertex/triangle command streams, and traverses the recovered
 placement/model/part/reference graph. It decodes the paired state and texture
@@ -46,17 +46,18 @@ uploads native Vita textures; applies recovered material and distance
 modulation; and separates alpha surfaces from opaque depth writes. The full
 6,303-triangle placed scene is rendered with a 37-degree perspective camera
 and GXM depth testing. Portable gameplay state currently covers tank movement,
-terrain following, turret aim, primary and selected secondary fire, retail
-weapon-slot inventory and cooldowns, shields, projectiles, ammunition, the recovered
-three-hostile first-mission roster, pursuit and firing, damage, enemy-only
+terrain following, turret aim, primary and recovered per-class secondary fire,
+retail weapon-slot inventory and cooldowns, shields, homing and area-damage
+projectiles, turbo, cloaking, ammunition, recovered per-mission rosters,
+pursuit and firing, damage, enemy-only
 victory evaluation, repeatable mission resets, and title/gameplay/pause
 transitions. Live projectiles use the retail 32x32 I8 sprite copied by the
 original game from ROM offset `0x102068`. N64 intensity is replicated into
 RGBA, including alpha, so its black border remains transparent in the Vita
 alpha pass. Tank body, turret, tread, and color-detail layers are resolved
 through the original common-world model-ID table and rendered from retail
-geometry, materials, and textures. The hostiles use the distinct recovered
-six-part tank-kind-4 definition instead of the player's M1A1. Campaign team
+geometry, materials, and textures. Hostiles use their configured recovered
+tank-kind definitions instead of the player's M1A1. Campaign team
 IDs select the four recovered environment-color entries for tank materials,
 and hostile turret-transformed parts track and fire at their target separately
 from the hull. The companion
@@ -77,7 +78,10 @@ effect is packaged. A dedicated Vita audio thread resamples the original
 22,050 Hz mix rate to the hardware's 48 kHz stereo output and restarts the
 effect only when simulation state reports a successfully created cannon shot.
 
-Mission zero uses level ID 26 in the recovered campaign configuration. The
+All 19 campaign records are selectable from the title screen. Their track IDs
+are translated through the recovered single-player asset dispatcher to the
+corresponding packaged geometry and actor/spawn worlds. Mission zero uses
+level ID 26 in the recovered campaign configuration. The
 single-player branch of the retail asset dispatcher maps that ID to
 `level_world_127` for SF Airport geometry and `level_world_131` for actors,
 spawns, and pickups. The port follows that mapping; the earlier `000`/`001`
@@ -85,6 +89,9 @@ pair belongs to a different mode and is not used as campaign mission zero.
 That mission record declares three AI vehicles. Retail one-player order
 `0,2,3,4,1` selects spawn slot 0 for the player and slots 2, 3, and 4 for the
 three team-1 hostile tanks; unused placement markers are not instantiated.
+Completing a mission unlocks the next record and writes a compact versioned,
+checksummed save file under `ux0:data/VitaTanxGA`; no host pointer or native
+layout is serialized.
 
 The frontend executes the recovered opening narrative and then displays the
 retail mission-zero location, objective, and complete briefing through the

@@ -91,3 +91,21 @@ bool btga_campaign_team_color(uint8_t team, BtgaTeamColor *color) {
     *color = kTeamColors[team];
     return true;
 }
+
+bool btga_campaign_worlds(uint8_t mission, uint8_t *geometry_world,
+                          uint8_t *spawn_world) {
+    /* func_800E8380's one-player ranges, selected by the campaign track table. */
+    static const uint8_t geometry_worlds[kMissionCount] = {
+        127, 0, 5, 11, 20, 25, 31, 38, 45, 51,
+        57, 61, 68, 80, 74, 86, 123, 94, 100,
+    };
+    static const uint8_t spawn_worlds[kMissionCount] = {
+        131, 3, 9, 17, 23, 30, 36, 43, 49, 55,
+        60, 66, 72, 84, 78, 92, 123, 98, 103,
+    };
+    if (mission >= kMissionCount || geometry_world == NULL ||
+        spawn_world == NULL) return false;
+    *geometry_world = geometry_worlds[mission];
+    *spawn_world = spawn_worlds[mission];
+    return true;
+}

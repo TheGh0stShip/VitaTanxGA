@@ -20,6 +20,10 @@ _Static_assert(sizeof(long) == 4, "PS Vita must use the ILP32 ABI");
 _Static_assert(sizeof(void *) == 4, "PS Vita pointers must be 32-bit");
 
 bool vita_platform_startup(void);
+bool vita_platform_load_mission(uint8_t mission);
+uint8_t vita_platform_mission(void);
+uint8_t vita_platform_highest_unlocked_mission(void);
+bool vita_platform_complete_mission(uint8_t mission);
 bool vita_platform_assets_ready(void);
 const BtgaWorldSummary *vita_platform_world_summary(void);
 bool vita_platform_world_bounds(BtgaWorldBounds *bounds);
