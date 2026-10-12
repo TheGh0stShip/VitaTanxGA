@@ -4,6 +4,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "btga_view.h"
+#include "btga_terrain.h"
+
 enum BtgaButton {
     BTGA_BUTTON_CONFIRM = 1u << 0,
     BTGA_BUTTON_CANCEL = 1u << 1,
@@ -14,6 +17,7 @@ enum BtgaButton {
     BTGA_BUTTON_RIGHT = 1u << 6,
     BTGA_BUTTON_FIRE = 1u << 7,
     BTGA_BUTTON_ALT_FIRE = 1u << 8,
+    BTGA_BUTTON_SELECT = 1u << 9,
 };
 
 typedef struct BtgaInput {
@@ -27,13 +31,47 @@ typedef struct BtgaInput {
 } BtgaInput;
 
 typedef enum BtgaRuntimeScreen {
-    BTGA_SCREEN_BOOT = 0,
-    BTGA_SCREEN_ASSET_PREVIEW = 1,
+    BTGA_SCREEN_TITLE = 0,
+    BTGA_SCREEN_GAMEPLAY = 1,
+    BTGA_SCREEN_PAUSED = 2,
 } BtgaRuntimeScreen;
+
+typedef struct BtgaPlayer {
+    float x;
+    float y;
+    float z;
+    float yaw;
+    float turret_yaw;
+    float velocity;
+    uint16_t health;
+    uint16_t ammo;
+    uint8_t fire_cooldown;
+} BtgaPlayer;
+
+typedef struct BtgaProjectile {
+    float x;
+    float y;
+    float z;
+    float velocity_x;
+    float velocity_z;
+    uint16_t lifetime;
+    bool active;
+} BtgaProjectile;
+
+enum { BTGA_MAX_PROJECTILES = 32 };
 
 typedef struct BtgaRuntime {
     uint64_t simulation_ticks;
     uint32_t accumulator_us;
+    uint32_t pending_pressed;
+    BtgaCamera camera;
+    BtgaPlayer player;
+    BtgaProjectile projectiles[BTGA_MAX_PROJECTILES];
+    const BtgaTerrain *terrain;
+    float world_min_x;
+    float world_min_z;
+    float world_max_x;
+    float world_max_z;
     BtgaRuntimeScreen screen;
     bool assets_ready;
     bool running;
@@ -45,6 +83,9 @@ enum {
 };
 
 void btga_runtime_init(BtgaRuntime *runtime, bool assets_ready);
+void btga_runtime_set_world_bounds(BtgaRuntime *runtime, float min_x, float min_z,
+                                   float max_x, float max_z);
+void btga_runtime_set_terrain(BtgaRuntime *runtime, const BtgaTerrain *terrain);
 void btga_runtime_update(BtgaRuntime *runtime, const BtgaInput *input,
                          uint32_t elapsed_us);
 

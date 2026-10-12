@@ -86,6 +86,10 @@ bool btga_scene_visit(const BtgaWorldComponents *world,
                 uint32_t offset = btga_read_be_u32(reference);
                 uint32_t size = btga_read_be_u32(reference + 4);
                 BtgaGeometrySummary geometry_summary;
+                context.placed.state_offset = btga_read_be_u32(reference + 8);
+                context.placed.state_size = btga_read_be_u32(reference + 12);
+                context.placed.texture_offset = btga_read_be_u32(reference + 16);
+                context.placed.texture_size = btga_read_be_u32(reference + 20);
                 if (offset > geometry_pool_size || size > geometry_pool_size - offset ||
                     !btga_geometry_visit(geometry_pool + offset, size, visit_local_triangle,
                                          &context, &geometry_summary)) return false;

@@ -10,6 +10,10 @@ typedef struct BtgaPlacedTriangle {
     int16_t placement_y;
     int16_t placement_z;
     uint16_t placement_yaw;
+    uint32_t state_offset;
+    uint32_t state_size;
+    uint32_t texture_offset;
+    uint32_t texture_size;
 } BtgaPlacedTriangle;
 
 typedef bool (*BtgaPlacedTriangleVisitor)(const BtgaPlacedTriangle *triangle,

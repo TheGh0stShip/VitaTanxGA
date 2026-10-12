@@ -14,18 +14,28 @@ runtime-test:
 	$(CC) -std=c11 -Wall -Wextra -Werror -Wpedantic \
 		-Iport/runtime/include port/runtime/src/btga_runtime.c \
 		port/runtime/src/btga_world.c port/runtime/src/btga_geometry.c \
-		port/runtime/src/btga_scene.c \
+		port/runtime/src/btga_scene.c port/runtime/src/btga_view.c \
+		port/runtime/src/btga_terrain.c port/runtime/src/btga_material.c \
+		port/runtime/src/btga_texture.c \
 		port/runtime/tests/runtime_test.c port/runtime/tests/world_test.c \
-		port/runtime/tests/geometry_test.c -o /tmp/vitatanxga-runtime-test
+		port/runtime/tests/geometry_test.c port/runtime/tests/view_test.c \
+		port/runtime/tests/material_test.c \
+		port/runtime/tests/texture_test.c \
+		-lm -o /tmp/vitatanxga-runtime-test
 	/tmp/vitatanxga-runtime-test
 
 runtime-asset-test: vita-assets
 	$(CC) -std=c11 -Wall -Wextra -Werror -Wpedantic \
 		-Iport/runtime/include port/runtime/src/btga_world.c \
 		port/runtime/src/btga_geometry.c port/runtime/src/btga_scene.c \
-		port/runtime/tests/world_asset_test.c -o /tmp/vitatanxga-world-asset-test
+		port/runtime/src/btga_view.c port/runtime/src/btga_terrain.c \
+		port/runtime/src/btga_material.c \
+		port/runtime/src/btga_texture.c \
+		port/runtime/tests/world_asset_test.c -lm -o /tmp/vitatanxga-world-asset-test
 	/tmp/vitatanxga-world-asset-test $(VITA_ASSETS)/worlds/level_world_000 \
-		$(VITA_ASSETS)/world-pools/geometry.bin
+		$(VITA_ASSETS)/world-pools/geometry.bin \
+		$(VITA_ASSETS)/world-pools/state.bin \
+		$(VITA_ASSETS)/world-pools/texture.bin
 
 vita-assets: verify-rom
 	$(PYTHON) tools/extract_world_pools.py $(VITA_ASSETS)/world-pools --rom $(ROM)

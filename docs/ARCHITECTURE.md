@@ -24,13 +24,9 @@ The PS Vita is one consumer of the recovered game, not the architecture of the
 recovered game itself. This separation keeps the decompilation reusable for
 desktop, other consoles, validation tools, and future ports.
 
-The work order is therefore:
-
-1. **Complete:** recover and byte-verify the original N64 source and data ownership.
-2. Separate portable game behavior from original hardware services without
-   changing the matching source used as evidence.
-3. Add host and console platform adapters outside the matching source tree.
-4. Apply Vita-specific optimization, packaging, and hardware validation only
-   in the Vita target.
+Port behavior only when its original formats and semantics are established by
+the matching project. Keep portability changes here rather than modifying or
+claiming completion of the matching decompilation. Apply Vita-specific
+optimization, packaging, and hardware validation only in the Vita adapter.
 
 The Vita cross-build must verify `arm-vita-eabi-gcc` targets 32-bit ARM and must inspect every linked dependency with `arm-vita-eabi-readelf -A`. All objects must agree on the floating-point calling convention. Hardware validation is required because host tests and Vita3K cannot establish Cortex-A9 alignment, timing, driver, or calling-convention correctness.

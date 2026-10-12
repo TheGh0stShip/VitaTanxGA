@@ -2,12 +2,18 @@
 
 int main(void) {
     BtgaRuntime runtime;
+    BtgaWorldBounds bounds;
     uint64_t previous_time;
 
     if (!vita_platform_startup()) {
         return 1;
     }
     btga_runtime_init(&runtime, vita_platform_assets_ready());
+    if (vita_platform_world_bounds(&bounds)) {
+        btga_runtime_set_world_bounds(&runtime, bounds.min_x, bounds.min_z,
+                                      bounds.max_x, bounds.max_z);
+    }
+    btga_runtime_set_terrain(&runtime, vita_platform_terrain());
     previous_time = vita_platform_now_us();
 
     while (runtime.running) {

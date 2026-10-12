@@ -1,6 +1,9 @@
 #include "btga_world.h"
 #include "btga_geometry.h"
 #include "btga_scene.h"
+#include "btga_terrain.h"
+#include "btga_material.h"
+#include "btga_texture.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,16 +46,25 @@ static bool load_component(const char *directory, unsigned int index,
 int main(int argc, char **argv) {
     LoadedFile files[7] = {0};
     LoadedFile geometry = {0};
+    LoadedFile state = {0};
+    LoadedFile texture = {0};
+    uint32_t *texture_pixels = NULL;
+    size_t texture_capacity = 0;
     BtgaWorldComponents components;
     BtgaWorldSummary summary;
     unsigned int index;
     uint64_t triangles = 0;
     uint64_t vertex_loads = 0;
+    uint32_t decoded_textures = 0;
+    uint32_t unsupported_textures = 0;
     BtgaSceneSummary scene_summary;
+    BtgaWorldBounds world_bounds;
+    BtgaTerrain terrain;
     int result = 1;
 
-    if (argc != 3) {
-        fprintf(stderr, "usage: %s WORLD_DIRECTORY GEOMETRY_POOL\n", argv[0]);
+    if (argc != 5) {
+        fprintf(stderr, "usage: %s WORLD_DIRECTORY GEOMETRY_POOL STATE_POOL TEXTURE_POOL\n",
+                argv[0]);
         return 2;
     }
     for (index = 0; index < 7; index++) {
@@ -63,6 +75,14 @@ int main(int argc, char **argv) {
     }
     if (!load_path(argv[2], &geometry)) {
         fprintf(stderr, "failed to load geometry pool\n");
+        goto cleanup;
+    }
+    if (!load_path(argv[3], &state)) {
+        fprintf(stderr, "failed to load state pool\n");
+        goto cleanup;
+    }
+    if (!load_path(argv[4], &texture)) {
+        fprintf(stderr, "failed to load texture pool\n");
         goto cleanup;
     }
     if (files[0].size != 4) goto cleanup;
@@ -87,17 +107,56 @@ int main(int argc, char **argv) {
         uint32_t offset = btga_read_be_u32(reference);
         uint32_t size = btga_read_be_u32(reference + 4);
         BtgaGeometrySummary geometry_summary;
+        uint32_t state_offset = btga_read_be_u32(reference + 8);
+        uint32_t state_size = btga_read_be_u32(reference + 12);
+        BtgaMaterialColor material;
+        uint32_t texture_offset = btga_read_be_u32(reference + 16);
+        uint32_t texture_size = btga_read_be_u32(reference + 20);
         if (offset > geometry.size || size > geometry.size - offset ||
             !btga_geometry_visit(geometry.data + offset, size, NULL, NULL,
                                  &geometry_summary)) {
             fprintf(stderr, "geometry reference %u failed validation\n", index);
             goto cleanup;
         }
+        if (state_offset > state.size || state_size > state.size - state_offset ||
+            !btga_material_color(state.data + state_offset, state_size, &material)) {
+            fprintf(stderr, "state reference %u failed validation\n", index);
+            goto cleanup;
+        }
         triangles += geometry_summary.triangle_count;
         vertex_loads += geometry_summary.vertex_load_count;
+        if (texture_offset != UINT32_MAX) {
+            BtgaTextureInfo texture_info;
+            size_t pixel_count;
+            if (texture_offset > texture.size || texture_size > texture.size - texture_offset ||
+                !btga_texture_describe(texture.data + texture_offset, texture_size,
+                                       state.data + state_offset, state_size,
+                                       &texture_info)) {
+                unsupported_textures++;
+                continue;
+            }
+            pixel_count = (size_t)texture_info.width * texture_info.height;
+            if (pixel_count > texture_capacity) {
+                uint32_t *replacement = realloc(texture_pixels,
+                                                pixel_count * sizeof(*texture_pixels));
+                if (replacement == NULL) goto cleanup;
+                texture_pixels = replacement;
+                texture_capacity = pixel_count;
+            }
+            if (btga_texture_decode_rgba(texture.data + texture_offset, texture_size,
+                                         &texture_info, texture_pixels,
+                                         texture_capacity)) decoded_textures++;
+            else unsupported_textures++;
+        }
     }
     printf("geometry validated: %llu triangles, %llu vertex loads\n",
            (unsigned long long)triangles, (unsigned long long)vertex_loads);
+    printf("textures decoded: %u references, %u unsupported\n", decoded_textures,
+           unsupported_textures);
+    if (decoded_textures != 1285 || unsupported_textures != 0) {
+        fprintf(stderr, "texture totals disagree with the verified corpus\n");
+        goto cleanup;
+    }
     if (triangles != 3958 || vertex_loads != 1345) {
         fprintf(stderr, "geometry totals disagree with the verified corpus\n");
         goto cleanup;
@@ -115,9 +174,24 @@ int main(int argc, char **argv) {
         fprintf(stderr, "placed scene totals disagree with the verified corpus\n");
         goto cleanup;
     }
+    if (!btga_world_bounds(&components, &world_bounds) ||
+        !btga_terrain_build(&components, geometry.data, geometry.size,
+                            &world_bounds, &terrain)) {
+        fprintf(stderr, "terrain construction failed\n");
+        goto cleanup;
+    }
+    printf("terrain built: %u/%u cells populated\n", terrain.populated_cell_count,
+           BTGA_TERRAIN_WIDTH * BTGA_TERRAIN_HEIGHT);
+    if (terrain.populated_cell_count != 7907) {
+        fprintf(stderr, "terrain coverage disagrees with the verified corpus\n");
+        goto cleanup;
+    }
     result = 0;
 cleanup:
     for (index = 0; index < 7; index++) free(files[index].data);
     free(geometry.data);
+    free(state.data);
+    free(texture.data);
+    free(texture_pixels);
     return result;
 }

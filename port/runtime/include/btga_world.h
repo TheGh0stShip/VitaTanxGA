@@ -23,8 +23,19 @@ typedef struct BtgaWorldSummary {
     uint32_t reference_count;
 } BtgaWorldSummary;
 
+typedef struct BtgaWorldBounds {
+    int16_t min_x;
+    int16_t min_y;
+    int16_t min_z;
+    int16_t max_x;
+    int16_t max_y;
+    int16_t max_z;
+} BtgaWorldBounds;
+
 bool btga_world_validate(const BtgaWorldComponents *components,
                          BtgaWorldSummary *summary);
 uint32_t btga_read_be_u32(const uint8_t bytes[4]);
+bool btga_world_bounds(const BtgaWorldComponents *components,
+                       BtgaWorldBounds *bounds);
 
 #endif

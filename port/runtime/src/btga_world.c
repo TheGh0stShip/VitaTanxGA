@@ -81,3 +81,34 @@ bool btga_world_validate(const BtgaWorldComponents *c, BtgaWorldSummary *summary
     *summary = (BtgaWorldSummary){groups, placements, models, parts, references};
     return true;
 }
+
+bool btga_world_bounds(const BtgaWorldComponents *components,
+                       BtgaWorldBounds *bounds) {
+    BtgaWorldSummary summary;
+    uint32_t index;
+    if (bounds == NULL || !btga_world_validate(components, &summary) ||
+        summary.group_count == 0) return false;
+    *bounds = (BtgaWorldBounds){
+        (int16_t)read_be_u16(components->groups + 4),
+        (int16_t)read_be_u16(components->groups + 6),
+        (int16_t)read_be_u16(components->groups + 8),
+        (int16_t)read_be_u16(components->groups + 10),
+        (int16_t)read_be_u16(components->groups + 12),
+        (int16_t)read_be_u16(components->groups + 14),
+    };
+    for (index = 1; index < summary.group_count; index++) {
+        const uint8_t *group = components->groups + index * BTGA_GROUP_SIZE;
+        int16_t values[6] = {
+            (int16_t)read_be_u16(group + 4), (int16_t)read_be_u16(group + 6),
+            (int16_t)read_be_u16(group + 8), (int16_t)read_be_u16(group + 10),
+            (int16_t)read_be_u16(group + 12), (int16_t)read_be_u16(group + 14),
+        };
+        if (values[0] < bounds->min_x) bounds->min_x = values[0];
+        if (values[1] < bounds->min_y) bounds->min_y = values[1];
+        if (values[2] < bounds->min_z) bounds->min_z = values[2];
+        if (values[3] > bounds->max_x) bounds->max_x = values[3];
+        if (values[4] > bounds->max_y) bounds->max_y = values[4];
+        if (values[5] > bounds->max_z) bounds->max_z = values[5];
+    }
+    return true;
+}

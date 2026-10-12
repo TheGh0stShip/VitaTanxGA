@@ -1,10 +1,9 @@
-# PS Vita port bootstrap
+# PS Vita port
 
 `port/vita` is a standalone ARMv7-A/ILP32 target.  It is intentionally not an
 alternative build of the matching N64 program: N64 assembly, libultra calls,
 display lists, ROM offsets, and generated extraction output stay out of this
-target. Its executable proves the VitaSDK renderer/input path and drives the
-platform-neutral runtime under `port/runtime`.
+target. The target drives the platform-neutral runtime under `port/runtime`.
 
 ## Prerequisites
 
@@ -40,11 +39,15 @@ runtime select decoded packaged assets without depending on Vita APIs. It
 also reads the first world's split component files, decodes their big-endian
 fields explicitly, validates table and pool ranges, interprets the referenced
 F3DEX2 vertex/triangle command streams, and traverses the recovered
-placement/model/part/reference graph. The Vita adapter currently draws the
-result as a top-down wireframe preview.
+placement/model/part/reference graph. It decodes the paired state and texture
+commands, uploads native Vita textures, and renders the placed scene with a
+37-degree perspective camera. Portable gameplay state currently covers tank
+movement, terrain following, turret aim, projectiles, ammunition, and
+title/gameplay/pause transitions.
 
 `make vita-check` tests the portable loaders against synthetic malformed
-inputs and all 1,287 geometry references in the extracted first-level data,
+inputs and all 1,287 geometry/state references plus all 1,285 textured
+references in the extracted first-level data,
 then validates that the port ELF is
 32-bit ARMv7-A and uses the same VFP-register calling convention as the
 installed VitaSDK. This is a cross-build gate only; it is not a
@@ -54,9 +57,10 @@ unless a supervised hardware-test request is made.
 ## Runtime boundary
 
 Portable game state belongs under `port/runtime`; Vita APIs stay under
-`port/vita`. The runtime currently owns simulation timing and screen state.
-Rendering, audio, storage, and threading will cross similarly narrow platform
-interfaces as their gameplay consumers are ported. Preserve N64 serialized
+`port/vita`. The runtime owns simulation, gameplay, scene decoding, materials,
+textures, terrain, and view transforms. Audio, storage, and threading will
+cross similarly narrow platform interfaces as their gameplay consumers are
+ported. Preserve N64 serialized
 addresses and pointer fields as explicit `uint32_t` tokens at that boundary.
 Never reinterpret big-endian N64 data through Vita native pointers, and do not
 globally pack recovered structs.

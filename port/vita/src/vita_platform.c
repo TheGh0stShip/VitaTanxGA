@@ -1,5 +1,7 @@
 #include "vita_platform.h"
 #include "btga_scene.h"
+#include "btga_material.h"
+#include "btga_texture.h"
 
 #include <psp2/ctrl.h>
 #include <psp2/kernel/processmgr.h>
@@ -8,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 
 enum {
     kColorBlack = RGBA8(8, 11, 16, 255),
@@ -17,7 +20,6 @@ enum {
 };
 
 static vita2d_pgf *s_font;
-static vita2d_texture *s_preview;
 static uint32_t s_previous_buttons;
 static BtgaWorldSummary s_world_summary;
 static bool s_world_ready;
@@ -29,16 +31,125 @@ typedef struct LoadedFile {
 
 static LoadedFile s_world_files[7];
 static LoadedFile s_geometry_pool;
+static LoadedFile s_state_pool;
+static LoadedFile s_texture_pool;
 static BtgaWorldComponents s_world_components;
+static BtgaTerrain s_terrain;
+
+enum { kMaximumProjectedTriangles = 2048, kMaximumTextureCache = 128 };
+
+typedef struct CachedTexture {
+    uint32_t texture_offset;
+    uint32_t texture_size;
+    uint32_t state_offset;
+    uint32_t state_size;
+    BtgaTextureInfo info;
+    vita2d_texture *texture;
+} CachedTexture;
+
+typedef struct ProjectedTriangle {
+    vita2d_color_vertex vertices[3];
+    vita2d_texture_vertex texture_vertices[3];
+    const CachedTexture *texture;
+    float depth;
+} ProjectedTriangle;
 
 typedef struct DrawSceneContext {
-    int16_t placement_x;
-    int16_t placement_z;
-    uint16_t placement_yaw;
-    float sine;
-    float cosine;
-    bool initialized;
+    BtgaProjector projector;
+    uint32_t count;
+    uint32_t state_offset;
+    uint32_t state_size;
+    BtgaMaterialColor material;
+    bool material_cached;
+    const CachedTexture *texture;
+    uint32_t texture_offset;
+    uint32_t texture_size;
+    uint32_t texture_state_offset;
+    uint32_t texture_state_size;
 } DrawSceneContext;
+
+static ProjectedTriangle s_projected_triangles[kMaximumProjectedTriangles];
+static vita2d_color_vertex s_draw_vertices[kMaximumProjectedTriangles * 3];
+static vita2d_texture_vertex s_texture_vertices[kMaximumProjectedTriangles * 3];
+static CachedTexture s_texture_cache[kMaximumTextureCache];
+static uint32_t s_texture_cache_count;
+
+static const CachedTexture *find_cached_texture(uint32_t texture_offset,
+                                                uint32_t texture_size,
+                                                uint32_t state_offset,
+                                                uint32_t state_size) {
+    uint32_t index;
+    for (index = 0; index < s_texture_cache_count; index++) {
+        CachedTexture *cached = &s_texture_cache[index];
+        if (cached->texture_offset == texture_offset &&
+            cached->texture_size == texture_size &&
+            cached->state_offset == state_offset && cached->state_size == state_size)
+            return cached;
+    }
+    return NULL;
+}
+
+static bool cache_texture(uint32_t texture_offset, uint32_t texture_size,
+                          uint32_t state_offset, uint32_t state_size) {
+    CachedTexture *cached;
+    uint32_t *pixels;
+    uint8_t *destination;
+    unsigned int stride;
+    unsigned int row;
+    size_t pixel_count;
+    if (texture_offset == UINT32_MAX ||
+        find_cached_texture(texture_offset, texture_size, state_offset, state_size) != NULL)
+        return true;
+    if (s_texture_cache_count >= kMaximumTextureCache ||
+        texture_offset > s_texture_pool.size ||
+        texture_size > s_texture_pool.size - texture_offset ||
+        state_offset > s_state_pool.size || state_size > s_state_pool.size - state_offset)
+        return false;
+    cached = &s_texture_cache[s_texture_cache_count];
+    if (!btga_texture_describe(s_texture_pool.data + texture_offset, texture_size,
+                               s_state_pool.data + state_offset, state_size,
+                               &cached->info)) return false;
+    pixel_count = (size_t)cached->info.width * cached->info.height;
+    pixels = malloc(pixel_count * sizeof(*pixels));
+    if (pixels == NULL ||
+        !btga_texture_decode_rgba(s_texture_pool.data + texture_offset, texture_size,
+                                  &cached->info, pixels, pixel_count)) {
+        free(pixels);
+        return false;
+    }
+    cached->texture = vita2d_create_empty_texture(cached->info.width, cached->info.height);
+    if (cached->texture == NULL) {
+        free(pixels);
+        return false;
+    }
+    destination = vita2d_texture_get_datap(cached->texture);
+    stride = vita2d_texture_get_stride(cached->texture);
+    for (row = 0; row < cached->info.height; row++)
+        memcpy(destination + row * stride, pixels + row * cached->info.width,
+               cached->info.width * sizeof(*pixels));
+    vita2d_texture_set_filters(cached->texture, SCE_GXM_TEXTURE_FILTER_LINEAR,
+                               SCE_GXM_TEXTURE_FILTER_LINEAR);
+    free(pixels);
+    cached->texture_offset = texture_offset;
+    cached->texture_size = texture_size;
+    cached->state_offset = state_offset;
+    cached->state_size = state_size;
+    s_texture_cache_count++;
+    return true;
+}
+
+static bool build_texture_cache(void) {
+    uint32_t reference_count = (uint32_t)(s_world_components.references_size / 24);
+    uint32_t index;
+    for (index = 0; index < reference_count; index++) {
+        const uint8_t *reference = s_world_components.references + index * 24;
+        if (!cache_texture(btga_read_be_u32(reference + 16),
+                           btga_read_be_u32(reference + 20),
+                           btga_read_be_u32(reference + 8),
+                           btga_read_be_u32(reference + 12))) return false;
+    }
+    return true;
+}
 
 static bool load_file(const char *path, LoadedFile *loaded) {
     FILE *file = fopen(path, "rb");
@@ -79,6 +190,8 @@ static bool load_first_world(void) {
         if (!load_file(paths[index], &s_world_files[index])) goto cleanup;
     }
     if (!load_file("app0:assets/world-pools/geometry.bin", &s_geometry_pool) ||
+        !load_file("app0:assets/world-pools/state.bin", &s_state_pool) ||
+        !load_file("app0:assets/world-pools/texture.bin", &s_texture_pool) ||
         s_world_files[0].size != 4) goto cleanup;
     s_world_components = (BtgaWorldComponents){
         s_world_files[1].data, s_world_files[1].size,
@@ -90,44 +203,158 @@ static bool load_first_world(void) {
         btga_read_be_u32(s_world_files[0].data),
     };
     valid = btga_world_validate(&s_world_components, &s_world_summary);
+    if (valid) {
+        BtgaWorldBounds bounds;
+        valid = btga_world_bounds(&s_world_components, &bounds) &&
+                btga_terrain_build(&s_world_components, s_geometry_pool.data,
+                                   s_geometry_pool.size, &bounds, &s_terrain) &&
+                build_texture_cache();
+    }
     if (valid) return true;
 cleanup:
+    for (index = 0; index < s_texture_cache_count; index++)
+        vita2d_free_texture(s_texture_cache[index].texture);
+    s_texture_cache_count = 0;
     for (index = 0; index < 7; index++) {
         free(s_world_files[index].data);
         s_world_files[index] = (LoadedFile){0};
     }
     free(s_geometry_pool.data);
     s_geometry_pool = (LoadedFile){0};
+    free(s_state_pool.data);
+    s_state_pool = (LoadedFile){0};
+    free(s_texture_pool.data);
+    s_texture_pool = (LoadedFile){0};
     return valid;
 }
 
 static bool draw_world_triangle(const BtgaPlacedTriangle *triangle, void *context) {
     DrawSceneContext *draw = context;
-    float points[3][2];
+    float world[3][3];
+    BtgaProjectedPoint projected[3];
+    ProjectedTriangle *output;
+    float depth = 0.0f;
+    unsigned int shade;
+    unsigned int red;
+    unsigned int green;
+    unsigned int blue;
     unsigned int index;
-    if (!draw->initialized || draw->placement_x != triangle->placement_x ||
-        draw->placement_z != triangle->placement_z ||
-        draw->placement_yaw != triangle->placement_yaw) {
-        float angle = (float)triangle->placement_yaw * (6.28318530718f / 65536.0f);
-        draw->placement_x = triangle->placement_x;
-        draw->placement_z = triangle->placement_z;
-        draw->placement_yaw = triangle->placement_yaw;
-        draw->sine = sinf(angle);
-        draw->cosine = cosf(angle);
-        draw->initialized = true;
-    }
+    if (draw->count >= kMaximumProjectedTriangles) return true;
+    btga_place_triangle(triangle, world);
     for (index = 0; index < 3; index++) {
-        float local_x = triangle->vertices[index].x;
-        float local_z = triangle->vertices[index].z;
-        float world_x = triangle->placement_x + draw->cosine * local_x - draw->sine * local_z;
-        float world_z = triangle->placement_z + draw->sine * local_x + draw->cosine * local_z;
-        points[index][0] = 420.0f + (world_x + 824.0f) * 0.065f;
-        points[index][1] = 500.0f - (world_z + 10703.0f) * 0.0235f;
+        if (!btga_project(&draw->projector, world[index], &projected[index])) return true;
+        depth += projected[index].depth;
     }
-    vita2d_draw_line(points[0][0], points[0][1], points[1][0], points[1][1], kColorGray);
-    vita2d_draw_line(points[1][0], points[1][1], points[2][0], points[2][1], kColorGray);
-    vita2d_draw_line(points[2][0], points[2][1], points[0][0], points[0][1], kColorGray);
+    if ((projected[0].x < -1.2f && projected[1].x < -1.2f && projected[2].x < -1.2f) ||
+        (projected[0].x > 1.2f && projected[1].x > 1.2f && projected[2].x > 1.2f) ||
+        (projected[0].y < -1.2f && projected[1].y < -1.2f && projected[2].y < -1.2f) ||
+        (projected[0].y > 1.2f && projected[1].y > 1.2f && projected[2].y > 1.2f)) return true;
+    output = &s_projected_triangles[draw->count++];
+    output->depth = depth / 3.0f;
+    if (!draw->material_cached || draw->state_offset != triangle->state_offset ||
+        draw->state_size != triangle->state_size) {
+        draw->state_offset = triangle->state_offset;
+        draw->state_size = triangle->state_size;
+        draw->material = (BtgaMaterialColor){110, 170, 90, 255, false};
+        if (triangle->state_offset <= s_state_pool.size &&
+            triangle->state_size <= s_state_pool.size - triangle->state_offset)
+            btga_material_color(s_state_pool.data + triangle->state_offset,
+                                triangle->state_size, &draw->material);
+        draw->material_cached = true;
+    }
+    shade = output->depth >= 16000.0f ? 70u : 230u - (unsigned int)(output->depth / 100.0f);
+    if (shade < 70u) shade = 70u;
+    red = draw->material.red * shade / 255u;
+    green = draw->material.green * shade / 255u;
+    blue = draw->material.blue * shade / 255u;
+    if (draw->texture_offset != triangle->texture_offset ||
+        draw->texture_size != triangle->texture_size ||
+        draw->texture_state_offset != triangle->state_offset ||
+        draw->texture_state_size != triangle->state_size) {
+        draw->texture_offset = triangle->texture_offset;
+        draw->texture_size = triangle->texture_size;
+        draw->texture_state_offset = triangle->state_offset;
+        draw->texture_state_size = triangle->state_size;
+        draw->texture = find_cached_texture(triangle->texture_offset,
+                                            triangle->texture_size,
+                                            triangle->state_offset,
+                                            triangle->state_size);
+    }
+    output->texture = draw->texture;
+    for (index = 0; index < 3; index++) {
+        output->vertices[index] = (vita2d_color_vertex){
+            (projected[index].x + 1.0f) * 480.0f,
+            (1.0f - projected[index].y) * 272.0f,
+            0.5f,
+            RGBA8(red, green, blue, 255),
+        };
+        output->texture_vertices[index] = (vita2d_texture_vertex){
+            output->vertices[index].x, output->vertices[index].y, 0.5f,
+            output->texture != NULL
+                ? (float)triangle->vertices[index].s /
+                      (32.0f * output->texture->info.width)
+                : 0.0f,
+            output->texture != NULL
+                ? (float)triangle->vertices[index].t /
+                      (32.0f * output->texture->info.height)
+                : 0.0f,
+        };
+    }
     return true;
+}
+
+static int compare_triangle_depth(const void *left, const void *right) {
+    const ProjectedTriangle *a = left;
+    const ProjectedTriangle *b = right;
+    if (a->texture == NULL && b->texture != NULL) return -1;
+    if (a->texture != NULL && b->texture == NULL) return 1;
+    if (a->texture != NULL && b->texture != NULL) {
+        if (a->texture->texture_offset < b->texture->texture_offset) return -1;
+        if (a->texture->texture_offset > b->texture->texture_offset) return 1;
+        if (a->texture->state_offset < b->texture->state_offset) return -1;
+        if (a->texture->state_offset > b->texture->state_offset) return 1;
+    }
+    return a->depth < b->depth ? 1 : a->depth > b->depth ? -1 : 0;
+}
+
+static uint32_t draw_world(const BtgaCamera *camera) {
+    DrawSceneContext draw = {0};
+    BtgaSceneSummary scene;
+    uint32_t triangle_index;
+    if (!btga_projector_init(camera, 960.0f / 544.0f, 37.0f, 16.0f,
+                             &draw.projector) ||
+        !btga_scene_visit(&s_world_components, s_geometry_pool.data,
+                          s_geometry_pool.size, 5000, draw_world_triangle,
+                          &draw, &scene)) return 0;
+    qsort(s_projected_triangles, draw.count, sizeof(s_projected_triangles[0]),
+          compare_triangle_depth);
+    triangle_index = 0;
+    while (triangle_index < draw.count) {
+        const CachedTexture *texture = s_projected_triangles[triangle_index].texture;
+        uint32_t group_start = triangle_index;
+        uint32_t group_count;
+        uint32_t output_index = 0;
+        while (triangle_index < draw.count &&
+               s_projected_triangles[triangle_index].texture == texture) {
+            unsigned int vertex_index;
+            for (vertex_index = 0; vertex_index < 3; vertex_index++) {
+                s_draw_vertices[output_index] =
+                    s_projected_triangles[triangle_index].vertices[vertex_index];
+                s_texture_vertices[output_index] =
+                    s_projected_triangles[triangle_index].texture_vertices[vertex_index];
+                output_index++;
+            }
+            triangle_index++;
+        }
+        group_count = triangle_index - group_start;
+        if (texture != NULL)
+            vita2d_draw_array_textured(texture->texture, SCE_GXM_PRIMITIVE_TRIANGLES,
+                                       s_texture_vertices, group_count * 3, 0xFFFFFFFFu);
+        else
+            vita2d_draw_array(SCE_GXM_PRIMITIVE_TRIANGLES, s_draw_vertices,
+                              group_count * 3);
+    }
+    return draw.count;
 }
 
 static int16_t normalize_axis(uint8_t value) {
@@ -145,6 +372,7 @@ static uint32_t map_buttons(uint32_t buttons) {
     mapped |= (buttons & SCE_CTRL_CROSS) ? BTGA_BUTTON_CONFIRM : 0;
     mapped |= (buttons & SCE_CTRL_CIRCLE) ? BTGA_BUTTON_CANCEL : 0;
     mapped |= (buttons & SCE_CTRL_START) ? BTGA_BUTTON_START : 0;
+    mapped |= (buttons & SCE_CTRL_SELECT) ? BTGA_BUTTON_SELECT : 0;
     mapped |= (buttons & SCE_CTRL_UP) ? BTGA_BUTTON_UP : 0;
     mapped |= (buttons & SCE_CTRL_DOWN) ? BTGA_BUTTON_DOWN : 0;
     mapped |= (buttons & SCE_CTRL_LEFT) ? BTGA_BUTTON_LEFT : 0;
@@ -164,17 +392,59 @@ bool vita_platform_startup(void) {
         vita2d_fini();
         return false;
     }
-    s_preview = vita2d_load_PNG_file("app0:assets/images/image_000.png");
     s_world_ready = load_first_world();
     return true;
 }
 
 bool vita_platform_assets_ready(void) {
-    return s_preview != NULL && s_world_ready;
+    return s_world_ready;
 }
 
 const BtgaWorldSummary *vita_platform_world_summary(void) {
     return s_world_ready ? &s_world_summary : NULL;
+}
+
+bool vita_platform_world_bounds(BtgaWorldBounds *bounds) {
+    return s_world_ready && btga_world_bounds(&s_world_components, bounds);
+}
+
+const BtgaTerrain *vita_platform_terrain(void) {
+    return s_world_ready ? &s_terrain : NULL;
+}
+
+static bool project_to_screen(const BtgaProjector *projector, float x, float y,
+                              float z, float *screen_x, float *screen_y) {
+    float world[3] = {x, y, z};
+    BtgaProjectedPoint point;
+    if (!btga_project(projector, world, &point)) return false;
+    *screen_x = (point.x + 1.0f) * 480.0f;
+    *screen_y = (1.0f - point.y) * 272.0f;
+    return true;
+}
+
+static void draw_actors(const BtgaRuntime *runtime) {
+    BtgaProjector projector;
+    float x;
+    float y;
+    unsigned int index;
+    if (!btga_projector_init(&runtime->camera, 960.0f / 544.0f, 37.0f, 16.0f,
+                             &projector)) return;
+    if (project_to_screen(&projector, runtime->player.x, runtime->player.y + 35.0f,
+                          runtime->player.z, &x, &y)) {
+        vita2d_draw_fill_circle(x, y, 8.0f, kColorOrange);
+        vita2d_draw_line(x, y,
+                         x + sinf(runtime->player.turret_yaw - runtime->camera.yaw) * 18.0f,
+                         y - cosf(runtime->player.turret_yaw - runtime->camera.yaw) * 18.0f,
+                         kColorWhite);
+    }
+    for (index = 0; index < BTGA_MAX_PROJECTILES; index++) {
+        const BtgaProjectile *projectile = &runtime->projectiles[index];
+        if (projectile->active &&
+            project_to_screen(&projector, projectile->x, projectile->y, projectile->z,
+                              &x, &y)) {
+            vita2d_draw_fill_circle(x, y, 3.0f, kColorWhite);
+        }
+    }
 }
 
 uint64_t vita_platform_now_us(void) {
@@ -206,39 +476,40 @@ void vita_platform_begin_frame(void) {
 
 void vita_platform_draw(const BtgaRuntime *runtime) {
     const BtgaWorldSummary *world = vita_platform_world_summary();
-    BtgaSceneSummary scene = {0};
-    DrawSceneContext draw_context = {0};
+    uint32_t visible_triangles = 0;
     vita2d_draw_rectangle(0, 0, 960, 544, kColorBlack);
     vita2d_draw_rectangle(54, 112, 8, 270, kColorOrange);
-    if (runtime->screen == BTGA_SCREEN_ASSET_PREVIEW && s_preview != NULL) {
-        btga_scene_visit(&s_world_components, s_geometry_pool.data,
-                         s_geometry_pool.size, 1500, draw_world_triangle,
-                         &draw_context, &scene);
+    if ((runtime->screen == BTGA_SCREEN_GAMEPLAY ||
+         runtime->screen == BTGA_SCREEN_PAUSED) && s_world_ready) {
+        visible_triangles = draw_world(&runtime->camera);
+        draw_actors(runtime);
     }
-    vita2d_pgf_draw_text(s_font, 88, 166, kColorWhite, 1.55f, "VitaTanx GA");
-    vita2d_pgf_draw_text(s_font, 90, 211, kColorOrange, 0.95f,
-                         "PS Vita port bootstrap");
-    vita2d_pgf_draw_text(s_font, 90, 282, kColorGray, 0.78f,
-                         "Renderer and input platform layer online.");
-    vita2d_pgf_draw_text(s_font, 90, 316, kColorGray, 0.78f,
-                         "Verified extracted game assets are staged in app0:assets.");
-    vita2d_pgf_draw_textf(s_font, 90, 350, kColorGray, 0.70f,
-                          "30 Hz simulation tick: %llu",
-                          (unsigned long long)runtime->simulation_ticks);
-    if (world != NULL) {
-        vita2d_pgf_draw_textf(s_font, 90, 378, kColorGray, 0.66f,
-                              "World: %lu placements, %lu models, %lu refs",
-                              (unsigned long)world->placement_count,
-                              (unsigned long)world->model_count,
-                              (unsigned long)world->reference_count);
+    if (runtime->screen == BTGA_SCREEN_TITLE) {
+        vita2d_pgf_draw_text(s_font, 88, 166, kColorWhite, 1.55f, "VitaTanx GA");
+        vita2d_pgf_draw_text(s_font, 90, 211, kColorOrange, 0.95f,
+                             "BattleTanx: Global Assault");
+        vita2d_pgf_draw_text(s_font, 90, 300, kColorGray, 0.78f,
+                             "CROSS: start   SELECT: exit");
+        if (world != NULL) {
+            vita2d_pgf_draw_textf(s_font, 90, 350, kColorGray, 0.66f,
+                                  "Loaded: %lu placements, %lu models",
+                                  (unsigned long)world->placement_count,
+                                  (unsigned long)world->model_count);
+        }
+    } else {
+        vita2d_pgf_draw_textf(s_font, 18, 30, kColorWhite, 0.64f,
+                              "ARMOR %u   AMMO %u   MESH %lu",
+                              runtime->player.health, runtime->player.ammo,
+                              (unsigned long)visible_triangles);
+        vita2d_pgf_draw_text(s_font, 18, 52, kColorGray, 0.55f,
+                             "LEFT: drive  RIGHT: turret  R: fire  START: pause");
+        if (runtime->screen == BTGA_SCREEN_PAUSED) {
+            vita2d_draw_rectangle(300, 190, 360, 150, RGBA8(8, 11, 16, 220));
+            vita2d_pgf_draw_text(s_font, 410, 245, kColorWhite, 1.1f, "PAUSED");
+            vita2d_pgf_draw_text(s_font, 340, 292, kColorGray, 0.65f,
+                                 "START: resume   CIRCLE: title");
+        }
     }
-    if (runtime->screen == BTGA_SCREEN_ASSET_PREVIEW) {
-        vita2d_pgf_draw_textf(s_font, 610, 515, kColorOrange, 0.58f,
-                              "%lu placed mesh triangles",
-                              (unsigned long)scene.visited_triangle_count);
-    }
-    vita2d_pgf_draw_text(s_font, 90, 430, kColorWhite, 0.70f,
-                         "CROSS: asset preview   CIRCLE: back   START: exit");
 }
 
 void vita_platform_end_frame(void) {
@@ -248,10 +519,6 @@ void vita_platform_end_frame(void) {
 
 void vita_platform_shutdown(void) {
     unsigned int index;
-    if (s_preview != NULL) {
-        vita2d_free_texture(s_preview);
-        s_preview = NULL;
-    }
     if (s_font != NULL) {
         vita2d_free_pgf(s_font);
         s_font = NULL;
@@ -262,5 +529,12 @@ void vita_platform_shutdown(void) {
     }
     free(s_geometry_pool.data);
     s_geometry_pool = (LoadedFile){0};
+    free(s_state_pool.data);
+    s_state_pool = (LoadedFile){0};
+    for (index = 0; index < s_texture_cache_count; index++)
+        vita2d_free_texture(s_texture_cache[index].texture);
+    s_texture_cache_count = 0;
+    free(s_texture_pool.data);
+    s_texture_pool = (LoadedFile){0};
     vita2d_fini();
 }

@@ -24,6 +24,10 @@ add_executable(${PROJECT_NAME}
   ../runtime/src/btga_world.c
   ../runtime/src/btga_geometry.c
   ../runtime/src/btga_scene.c
+  ../runtime/src/btga_view.c
+  ../runtime/src/btga_terrain.c
+  ../runtime/src/btga_material.c
+  ../runtime/src/btga_texture.c
   src/main.c
   src/vita_platform.c
 )

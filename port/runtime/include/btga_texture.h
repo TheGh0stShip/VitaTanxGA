@@ -1,0 +1,25 @@
+#ifndef VITATANXGA_TEXTURE_H
+#define VITATANXGA_TEXTURE_H
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+typedef struct BtgaTextureInfo {
+    uint32_t image_offset;
+    uint32_t palette_offset;
+    uint16_t width;
+    uint16_t height;
+    uint8_t format_id;
+    uint8_t size_id;
+    bool has_palette;
+} BtgaTextureInfo;
+
+bool btga_texture_describe(const uint8_t *texture_chunk, size_t texture_size,
+                           const uint8_t *state_chunk, size_t state_size,
+                           BtgaTextureInfo *info);
+bool btga_texture_decode_rgba(const uint8_t *texture_chunk, size_t texture_size,
+                              const BtgaTextureInfo *info, uint32_t *pixels,
+                              size_t pixel_capacity);
+
+#endif
