@@ -2,7 +2,7 @@
 
 The production target is a static recompilation of the complete retail N64
 program. `port/recomp/prepare.sh` verifies the user's ROM, runs N64Recomp, and
-produces 35 local C translation units containing 1,733 translated bodies. HLE,
+produces 35 local C translation units containing 1,732 translated bodies. HLE,
 patch, stub, and N64-only boundaries cover the rest of the authoritative
 1,879-entry catalogue. Those generated files are ignored and are never
 committed.

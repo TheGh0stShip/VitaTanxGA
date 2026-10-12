@@ -18,6 +18,7 @@ void __osPfsRWInode_recomp(uint8_t*, recomp_context*);
 void __osPfsSelectBank_recomp(uint8_t*, recomp_context*);
 void __osRepairPackId_recomp(uint8_t*, recomp_context*);
 void __osSiCreateAccessQueue_recomp(uint8_t*, recomp_context*);
+void osDestroyThread_801058B0(uint8_t*, recomp_context*);
 void __udivdi3_recomp(uint8_t*, recomp_context*);
 void __umoddi3_recomp(uint8_t*, recomp_context*);
 void func_80098B40(uint8_t*, recomp_context*);

@@ -2,10 +2,16 @@
 #include <cstdlib>
 
 #include "runtime_compat.h"
+#include "ultramodern/ultra64.h"
 #include "vita_recomp_diagnostics.hpp"
 
 extern "C" void __osGetSR_recomp(std::uint8_t*, recomp_context* ctx) {
     ctx->r2 = cop0_status_read(ctx);
+}
+
+extern "C" void osDestroyThread_801058B0(std::uint8_t* rdram,
+                                           recomp_context* ctx) {
+    osDestroyThread(rdram, static_cast<PTR(OSThread)>(ctx->r4));
 }
 
 #define BTGA_UNSUPPORTED_RECOMP(name)                                      \

@@ -10,7 +10,7 @@ decompilation project.
 
 The primary VPK currently includes:
 
-- the complete 1,879-entry retail catalogue: 1,733 translated C bodies across
+- the complete 1,879-entry retail catalogue: 1,732 translated C bodies across
   35 generated units plus explicit HLE, patch, stub, and N64-only boundaries;
 - N64 scheduler, threads, message queues, timers, controller, PI, AI, VI, SP,
   DP, and audio-microcode services;

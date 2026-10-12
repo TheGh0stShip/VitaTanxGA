@@ -29,6 +29,9 @@ ignored = [
     "func_800A1384",
     "func_80079FF0",
     "func_8007A818",
+    # This ROM-local copy otherwise enters the original scheduler internals.
+    # Route teardown through N64ModernRuntime's cooperative host-thread owner.
+    "osDestroyThread_801058B0",
 ]
 
 # func_800F11D0 truncates the frame step before decrementing shield-hit flash

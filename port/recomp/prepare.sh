@@ -36,8 +36,8 @@ print(sum(len(section.get("functions", ())) for section in catalogue["section"])
 PY
 )"
 translated_count="$(grep -h '^RECOMP_FUNC void ' generated/functions/funcs_*.c | wc -l)"
-[[ "$catalog_count" -eq 1879 && "$translated_count" -eq 1733 ]] || {
-    echo "Expected 1,879 catalogue entries and 1,733 translated bodies; got $catalog_count and $translated_count" >&2
+[[ "$catalog_count" -eq 1879 && "$translated_count" -eq 1732 ]] || {
+    echo "Expected 1,879 catalogue entries and 1,732 translated bodies; got $catalog_count and $translated_count" >&2
     exit 1
 }
-echo "Covered all 1,879 catalogue entries: 1,733 translated bodies in 35 units plus HLE/patch boundaries"
+echo "Covered all 1,879 catalogue entries: 1,732 translated bodies in 35 units plus HLE/patch boundaries"
