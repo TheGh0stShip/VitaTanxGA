@@ -47,8 +47,12 @@ static BtgaWorldComponents s_spawn_components;
 static BtgaTerrain s_terrain;
 static BtgaTankDefinition s_player_tank;
 static uint16_t s_player_model_indices[BTGA_TANK_MAX_RENDER_PARTS];
+enum { kMaximumPickups = 64 };
+static BtgaWorldPickup s_pickups[kMaximumPickups];
+static uint16_t s_pickup_model_indices[kMaximumPickups];
+static size_t s_pickup_count;
 
-enum { kMaximumProjectedTriangles = 2048, kMaximumTextureCache = 128 };
+enum { kMaximumProjectedTriangles = 2048, kMaximumTextureCache = 256 };
 
 typedef struct CachedTexture {
     uint32_t texture_offset;
@@ -205,6 +209,17 @@ static bool cache_model_textures(const BtgaWorldComponents *world,
     return true;
 }
 
+static bool cache_entire_model_textures(const BtgaWorldComponents *world,
+                                        uint16_t model_index) {
+    uint8_t part_count;
+    uint8_t part;
+    if (model_index >= world->models_size / 16) return false;
+    part_count = world->models[(size_t)model_index * 16];
+    for (part = 0; part < part_count; part++)
+        if (!cache_model_textures(world, model_index, part)) return false;
+    return true;
+}
+
 static bool load_file(const char *path, LoadedFile *loaded) {
     FILE *file = fopen(path, "rb");
     long size;
@@ -356,6 +371,18 @@ static bool load_first_world(void) {
                     cache_model_textures(&s_common_components,
                                          s_player_model_indices[index], 0);
         }
+        valid = valid && btga_world_pickups(&s_spawn_components, s_pickups,
+                                            kMaximumPickups, &s_pickup_count);
+        for (index = 0; valid && index < s_pickup_count; index++) {
+            uint16_t model_id;
+            valid = btga_pickup_model_id(s_gameplay_data.data,
+                                         s_gameplay_data.size,
+                                         s_pickups[index].kind, &model_id) &&
+                    btga_common_model_index(&s_common_components, model_id,
+                                            &s_pickup_model_indices[index]) &&
+                    cache_entire_model_textures(&s_common_components,
+                                                s_pickup_model_indices[index]);
+        }
     }
     if (valid) return true;
 cleanup:
@@ -478,6 +505,7 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
     uint32_t tank_triangles;
     uint32_t tank_part;
     uint32_t enemy_index;
+    uint32_t pickup_index;
     uint32_t triangle_index;
     if (!btga_projector_init(&runtime->camera, 960.0f / 544.0f, 37.0f, 16.0f,
                              &draw.projector)) return 0;
@@ -515,6 +543,16 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
                                   1000, draw_world_triangle, &draw,
                                   &tank_triangles)) return 0;
         }
+    }
+    for (pickup_index = 0; pickup_index < s_pickup_count; pickup_index++) {
+        uint16_t spin = (uint16_t)(runtime->simulation_ticks * 0x600u);
+        const BtgaWorldPickup *pickup = &s_pickups[pickup_index];
+        if (!btga_model_visit(&s_common_components,
+                              s_pickup_model_indices[pickup_index], 0,
+                              pickup->x, pickup->y, pickup->z, spin,
+                              s_geometry_pool.data, s_geometry_pool.size,
+                              1000, draw_world_triangle, &draw,
+                              &tank_triangles)) return 0;
     }
     draw.actor = false;
     if (!btga_scene_visit(&s_world_components, s_geometry_pool.data,

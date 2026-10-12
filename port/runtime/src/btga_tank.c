@@ -2,11 +2,25 @@
 
 #define BTGA_GAMEPLAY_VRAM UINT32_C(0x80122384)
 #define BTGA_TANK_BANK_VRAM UINT32_C(0x80122E28)
+#define BTGA_PICKUP_MODEL_BANK_VRAM UINT32_C(0x80123B1C)
 enum { BTGA_TANK_RECORD_SIZE = 0xD0u };
 
 static uint32_t read_be_u32(const uint8_t *p) {
     return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
            ((uint32_t)p[2] << 8) | p[3];
+}
+
+bool btga_pickup_model_id(const uint8_t *data, size_t size,
+                          uint8_t pickup_kind, uint16_t *model_id) {
+    size_t offset = (BTGA_PICKUP_MODEL_BANK_VRAM - BTGA_GAMEPLAY_VRAM) +
+                    (size_t)pickup_kind * 4u;
+    uint32_t value;
+    if (data == NULL || model_id == NULL || pickup_kind >= 20 ||
+        offset > size || 4u > size - offset) return false;
+    value = read_be_u32(data + offset);
+    if (value >= 263u) return false;
+    *model_id = (uint16_t)value;
+    return true;
 }
 
 bool btga_tank_definition(const uint8_t *data, size_t size, uint8_t kind,

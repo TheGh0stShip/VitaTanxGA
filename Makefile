@@ -31,6 +31,7 @@ runtime-test:
 runtime-asset-test: vita-assets
 	$(CC) -std=c11 -Wall -Wextra -Werror -Wpedantic \
 		-Iport/runtime/include port/runtime/src/btga_world.c \
+		port/runtime/src/btga_tank.c \
 		port/runtime/src/btga_geometry.c port/runtime/src/btga_scene.c \
 		port/runtime/src/btga_view.c port/runtime/src/btga_terrain.c \
 		port/runtime/src/btga_material.c \
@@ -41,7 +42,8 @@ runtime-asset-test: vita-assets
 		$(VITA_ASSETS)/world-pools/state.bin \
 		$(VITA_ASSETS)/world-pools/texture.bin \
 		$(VITA_ASSETS)/worlds/common_world \
-		$(VITA_ASSETS)/worlds/level_world_001
+		$(VITA_ASSETS)/worlds/level_world_001 \
+		$(VITA_ASSETS)/gameplay/gameplay.bin
 
 runtime-script-asset-test: vita-assets
 	$(CC) -std=c11 -Wall -Wextra -Werror -Wpedantic \

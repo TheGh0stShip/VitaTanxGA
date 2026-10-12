@@ -12,6 +12,8 @@ int btga_world_tests(void) {
     BtgaWorldSummary summary;
     BtgaWorldBounds bounds;
     BtgaWorldSpawn spawn;
+    BtgaWorldPickup pickup;
+    size_t pickup_count;
     uint16_t model_index;
     BtgaWorldComponents c = {
         groups, sizeof(groups), placements, sizeof(placements),
@@ -31,6 +33,10 @@ int btga_world_tests(void) {
     placements[6] = 0x40;
     assert(btga_world_find_spawn(&c, 2, 4, &spawn));
     assert(spawn.yaw == 0x4000);
+    definitions[0] = 7;
+    definitions[1] = 11;
+    assert(btga_world_pickups(&c, &pickup, 1, &pickup_count));
+    assert(pickup_count == 1 && pickup.kind == 11 && pickup.yaw == 0x4000);
     c.definitions_size = 1;
     models[1] = 1;
     assert(!btga_world_validate(&c, &summary));

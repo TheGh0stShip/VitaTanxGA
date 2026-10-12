@@ -4,6 +4,7 @@
 #include "btga_terrain.h"
 #include "btga_material.h"
 #include "btga_texture.h"
+#include "btga_tank.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,6 +51,7 @@ int main(int argc, char **argv) {
     LoadedFile geometry = {0};
     LoadedFile state = {0};
     LoadedFile texture = {0};
+    LoadedFile gameplay = {0};
     uint32_t *texture_pixels = NULL;
     size_t texture_capacity = 0;
     BtgaWorldComponents components;
@@ -69,8 +71,8 @@ int main(int argc, char **argv) {
     uint32_t tank_triangles;
     int result = 1;
 
-    if (argc != 7) {
-        fprintf(stderr, "usage: %s WORLD_DIRECTORY GEOMETRY_POOL STATE_POOL TEXTURE_POOL COMMON_WORLD SPAWN_WORLD\n",
+    if (argc != 8) {
+        fprintf(stderr, "usage: %s WORLD_DIRECTORY GEOMETRY_POOL STATE_POOL TEXTURE_POOL COMMON_WORLD SPAWN_WORLD GAMEPLAY_DATA\n",
                 argv[0]);
         return 2;
     }
@@ -98,6 +100,10 @@ int main(int argc, char **argv) {
     }
     if (!load_path(argv[4], &texture)) {
         fprintf(stderr, "failed to load texture pool\n");
+        goto cleanup;
+    }
+    if (!load_path(argv[7], &gameplay)) {
+        fprintf(stderr, "failed to load gameplay definitions\n");
         goto cleanup;
     }
     if (files[0].size != 4) goto cleanup;
@@ -130,6 +136,8 @@ int main(int argc, char **argv) {
     {
         BtgaWorldSummary spawn_summary;
         BtgaWorldSpawn spawn;
+        BtgaWorldPickup pickups[64];
+        size_t pickup_count;
         uint8_t team, column;
         if (!btga_world_validate(&spawn_components, &spawn_summary)) goto cleanup;
         for (team = 0; team < 2; team++) {
@@ -140,7 +148,29 @@ int main(int argc, char **argv) {
                 }
             }
         }
-        printf("spawn formation validated: 5 player and 5 opposing slots\n");
+        if (!btga_world_pickups(&spawn_components, pickups, 64, &pickup_count) ||
+            pickup_count != 41) {
+            fprintf(stderr, "pickup placement count disagrees with retail data\n");
+            goto cleanup;
+        }
+        for (index = 0; index < pickup_count; index++) {
+            uint16_t model_id;
+            uint16_t model_index;
+            uint32_t pickup_triangles;
+            if (!btga_pickup_model_id(gameplay.data, gameplay.size,
+                                      pickups[index].kind, &model_id) ||
+                !btga_common_model_index(&common_components, model_id,
+                                         &model_index) ||
+                !btga_model_visit(&common_components, model_index, 0,
+                                  pickups[index].x, pickups[index].y,
+                                  pickups[index].z, pickups[index].yaw,
+                                  geometry.data, geometry.size, 1000, NULL, NULL,
+                                  &pickup_triangles) || pickup_triangles == 0) {
+                fprintf(stderr, "pickup %u model failed validation\n", index);
+                goto cleanup;
+            }
+        }
+        printf("spawn formation validated: 5 player, 5 opposing, 41 pickups\n");
     }
     if (!btga_world_validate(&common_components, &common_summary) ||
         common_summary.model_count != 244 ||
@@ -259,6 +289,7 @@ cleanup:
     free(geometry.data);
     free(state.data);
     free(texture.data);
+    free(gameplay.data);
     free(texture_pixels);
     return result;
 }

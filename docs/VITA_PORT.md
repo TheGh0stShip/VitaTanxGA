@@ -47,7 +47,11 @@ ammunition, the full recovered five-tank opposing formation, enemy pursuit and
 firing, damage, repeatable mission resets, and title/gameplay/pause
 transitions. Tank body, turret, tread, and color-detail layers are resolved
 through the original common-world model-ID table and rendered from retail
-geometry, materials, and textures.
+geometry, materials, and textures. The companion world is also decoded for
+entry type 7 placements; all 41 first-mission pickups resolve through the
+retail 20-entry gameplay model table, load their common-world textures, and
+render with the original rotation behavior. Pickup effects are not assigned
+until their retail mode handlers are connected.
 
 The portable script loader validates the first campaign script header and
 all 41 split streams using the retail command-width rules. The full 23,483

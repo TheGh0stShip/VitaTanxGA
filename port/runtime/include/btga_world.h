@@ -37,6 +37,12 @@ typedef struct BtgaWorldSpawn {
     uint16_t yaw;
 } BtgaWorldSpawn;
 
+typedef struct BtgaWorldPickup {
+    int16_t x, y, z;
+    uint16_t yaw;
+    uint8_t kind;
+} BtgaWorldPickup;
+
 bool btga_world_validate(const BtgaWorldComponents *components,
                          BtgaWorldSummary *summary);
 uint32_t btga_read_be_u32(const uint8_t bytes[4]);
@@ -46,5 +52,8 @@ bool btga_common_model_index(const BtgaWorldComponents *components,
                              uint16_t model_id, uint16_t *model_index);
 bool btga_world_find_spawn(const BtgaWorldComponents *components,
                            uint8_t row, uint8_t column, BtgaWorldSpawn *spawn);
+bool btga_world_pickups(const BtgaWorldComponents *components,
+                        BtgaWorldPickup *pickups, size_t capacity,
+                        size_t *pickup_count);
 
 #endif
