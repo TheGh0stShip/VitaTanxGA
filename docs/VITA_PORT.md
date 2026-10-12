@@ -60,7 +60,16 @@ DaedalusX64-vitaGL.
 The bootstrap pins and builds vitaGL with the Vita renderer's required
 single-threaded, splash-free configuration rather than linking the generic
 SDK archive. Runtime-compiled vitaGL shaders are cached under the title's own
-`ux0:data/VitaTanxGA/shader_cache` directory.
+`ux0:data/VitaTanxGA/shader_cache` directory. Cache filenames include a hash
+of the generated vertex and fragment sources, so renderer changes cannot reuse
+an ABI-compatible but semantically stale program binary.
+
+Fast3D renders the game into a 320x240 framebuffer and resolves the completed
+frame on the GPU into a centered 726x544 Vita viewport. This retains the
+original 4:3 geometry while avoiding the nearly sevenfold fill-rate cost of
+rendering every N64 primitive directly at 960x544. If a later display list
+uses the active N64 color image as texture data, the bridge synchronizes that
+image back to guest RDRAM on demand; ordinary textures do not incur readback.
 
 `runtime.log` records durable first-event milestones for VI delivery, accepted
 and rejected display lists, frame presentation, and audio initialization. A

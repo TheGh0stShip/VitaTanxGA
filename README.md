@@ -15,6 +15,7 @@ The primary VPK currently includes:
 - N64 scheduler, threads, message queues, timers, controller, PI, AI, VI, SP,
   DP, and audio-microcode services;
 - a live F3DEX 2.07/GBI2 display-list renderer backed by vitaGL;
+- native 320x240 scene rendering with a GPU-scaled, centered 4:3 Vita output;
 - four-player Vita/PSTV controls, analog input, external-controller rumble,
   and rate-converted 48 kHz threaded stereo audio;
 - Controller Pak profile storage in standard 32 KiB `.mpk` images;
