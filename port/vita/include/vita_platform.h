@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "btga_runtime.h"
+#include "btga_world.h"
 
 /*
  * This is the first narrow platform seam for the future portable runtime.
@@ -18,6 +19,8 @@ _Static_assert(sizeof(long) == 4, "PS Vita must use the ILP32 ABI");
 _Static_assert(sizeof(void *) == 4, "PS Vita pointers must be 32-bit");
 
 bool vita_platform_startup(void);
+bool vita_platform_assets_ready(void);
+const BtgaWorldSummary *vita_platform_world_summary(void);
 uint64_t vita_platform_now_us(void);
 void vita_platform_poll_input(BtgaInput *input);
 void vita_platform_begin_frame(void);

@@ -15,6 +15,7 @@ The repository currently produces an installable PS Vita VPK that:
 - maps Vita buttons and both analog sticks into a portable input structure;
 - initializes Vita2D rendering;
 - loads and displays a decoded game image from `app0:assets`;
+- loads and validates the first extracted world's big-endian component tables;
 - packages decoded worlds, images, scripts, and libmus audio resources; and
 - validates the executable and code-bearing libraries for ABI consistency.
 
@@ -52,10 +53,11 @@ make vita-check
 1. verifies the ROM;
 2. extracts decoded game resources into the ignored
    `assets/extracted/us/vita` directory;
-3. cross-compiles the Vita executable;
-4. packages the extracted resources into the VPK; and
-5. runs the host-side portable-runtime test; and
-6. verifies ELF32 ARMv7-A and hard-float attributes.
+3. validates the extracted first-level world through the portable C loader;
+4. cross-compiles the Vita executable;
+5. packages the extracted resources into the VPK;
+6. runs the host-side portable-runtime tests; and
+7. verifies ELF32 ARMv7-A and hard-float attributes.
 
 The resulting package is:
 

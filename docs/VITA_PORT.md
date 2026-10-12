@@ -35,13 +35,17 @@ scripts, and libmus data into the ignored `assets/extracted/us/vita` tree.
 Those generated files are packaged under `app0:assets/`; the ROM itself is
 never packaged or committed. The executable runs a bounded 30 Hz fixed-step
 simulation, maps Vita controls to portable button/analog state, and lets the
-runtime select a decoded packaged image without depending on Vita APIs.
+runtime select a decoded packaged image without depending on Vita APIs. It
+also reads the first world's split component files, decodes their big-endian
+fields explicitly, validates table and pool ranges, and reports the recovered
+placement/model/reference counts on the bootstrap screen.
 
-`make vita-check` validates that the port ELF is 32-bit ARMv7-A and uses the
-same VFP-register calling convention as the installed VitaSDK.  This is a
-cross-build gate only; it is not a physical-hardware validation claim.  Do not
-install or launch it on hardware unless a supervised hardware-test request is
-made.
+`make vita-check` tests the portable loader against both synthetic malformed
+inputs and the extracted first-level data, then validates that the port ELF is
+32-bit ARMv7-A and uses the same VFP-register calling convention as the
+installed VitaSDK. This is a cross-build gate only; it is not a
+physical-hardware validation claim. Do not install or launch it on hardware
+unless a supervised hardware-test request is made.
 
 ## Runtime boundary
 

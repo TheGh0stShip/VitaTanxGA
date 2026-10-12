@@ -7,7 +7,7 @@ int main(void) {
     if (!vita_platform_startup()) {
         return 1;
     }
-    btga_runtime_init(&runtime, true);
+    btga_runtime_init(&runtime, vita_platform_assets_ready());
     previous_time = vita_platform_now_us();
 
     while (runtime.running) {

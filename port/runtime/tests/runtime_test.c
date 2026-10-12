@@ -2,6 +2,8 @@
 
 #include <assert.h>
 
+int btga_world_tests(void);
+
 int main(void) {
     BtgaRuntime runtime;
     BtgaInput input = {0};
@@ -24,5 +26,6 @@ int main(void) {
     input.pressed = BTGA_BUTTON_START;
     btga_runtime_update(&runtime, &input, 0);
     assert(!runtime.running);
+    btga_world_tests();
     return 0;
 }

@@ -4,6 +4,9 @@
 #include <psp2/kernel/processmgr.h>
 #include <vita2d.h>
 
+#include <stdio.h>
+#include <stdlib.h>
+
 enum {
     kColorBlack = RGBA8(8, 11, 16, 255),
     kColorOrange = RGBA8(239, 122, 42, 255),
@@ -14,6 +17,66 @@ enum {
 static vita2d_pgf *s_font;
 static vita2d_texture *s_preview;
 static uint32_t s_previous_buttons;
+static BtgaWorldSummary s_world_summary;
+static bool s_world_ready;
+
+typedef struct LoadedFile {
+    uint8_t *data;
+    size_t size;
+} LoadedFile;
+
+static bool load_file(const char *path, LoadedFile *loaded) {
+    FILE *file = fopen(path, "rb");
+    long size;
+
+    if (file == NULL || fseek(file, 0, SEEK_END) != 0 ||
+        (size = ftell(file)) <= 0 || fseek(file, 0, SEEK_SET) != 0) {
+        if (file != NULL) fclose(file);
+        return false;
+    }
+    loaded->data = malloc((size_t)size);
+    loaded->size = (size_t)size;
+    if (loaded->data == NULL ||
+        fread(loaded->data, 1, loaded->size, file) != loaded->size) {
+        free(loaded->data);
+        *loaded = (LoadedFile){0};
+        fclose(file);
+        return false;
+    }
+    fclose(file);
+    return true;
+}
+
+static bool load_first_world(void) {
+    static const char *const paths[7] = {
+        "app0:assets/worlds/level_world_000/component0.bin",
+        "app0:assets/worlds/level_world_000/component1.bin",
+        "app0:assets/worlds/level_world_000/component2.bin",
+        "app0:assets/worlds/level_world_000/component3.bin",
+        "app0:assets/worlds/level_world_000/component4.bin",
+        "app0:assets/worlds/level_world_000/component5.bin",
+        "app0:assets/worlds/level_world_000/component6.bin",
+    };
+    LoadedFile files[7] = {0};
+    BtgaWorldComponents components;
+    bool valid = false;
+    unsigned int index;
+
+    for (index = 0; index < 7; index++) {
+        if (!load_file(paths[index], &files[index])) goto cleanup;
+    }
+    if (files[0].size != 4) goto cleanup;
+    components = (BtgaWorldComponents){
+        files[1].data, files[1].size, files[2].data, files[2].size,
+        files[3].data, files[3].size, files[4].data, files[4].size,
+        files[5].data, files[5].size, files[6].data, files[6].size,
+        btga_read_be_u32(files[0].data),
+    };
+    valid = btga_world_validate(&components, &s_world_summary);
+cleanup:
+    for (index = 0; index < 7; index++) free(files[index].data);
+    return valid;
+}
 
 static int16_t normalize_axis(uint8_t value) {
     int scaled = ((int)value - 128) * 256;
@@ -50,7 +113,16 @@ bool vita_platform_startup(void) {
         return false;
     }
     s_preview = vita2d_load_PNG_file("app0:assets/images/image_000.png");
+    s_world_ready = load_first_world();
     return true;
+}
+
+bool vita_platform_assets_ready(void) {
+    return s_preview != NULL && s_world_ready;
+}
+
+const BtgaWorldSummary *vita_platform_world_summary(void) {
+    return s_world_ready ? &s_world_summary : NULL;
 }
 
 uint64_t vita_platform_now_us(void) {
@@ -81,6 +153,7 @@ void vita_platform_begin_frame(void) {
 }
 
 void vita_platform_draw(const BtgaRuntime *runtime) {
+    const BtgaWorldSummary *world = vita_platform_world_summary();
     vita2d_draw_rectangle(0, 0, 960, 544, kColorBlack);
     vita2d_draw_rectangle(54, 112, 8, 270, kColorOrange);
     if (runtime->screen == BTGA_SCREEN_ASSET_PREVIEW && s_preview != NULL) {
@@ -99,6 +172,13 @@ void vita_platform_draw(const BtgaRuntime *runtime) {
     vita2d_pgf_draw_textf(s_font, 90, 350, kColorGray, 0.70f,
                           "30 Hz simulation tick: %llu",
                           (unsigned long long)runtime->simulation_ticks);
+    if (world != NULL) {
+        vita2d_pgf_draw_textf(s_font, 90, 378, kColorGray, 0.66f,
+                              "World: %lu placements, %lu models, %lu refs",
+                              (unsigned long)world->placement_count,
+                              (unsigned long)world->model_count,
+                              (unsigned long)world->reference_count);
+    }
     vita2d_pgf_draw_text(s_font, 90, 430, kColorWhite, 0.70f,
                          "CROSS: asset preview   CIRCLE: back   START: exit");
 }
