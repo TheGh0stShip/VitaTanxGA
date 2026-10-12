@@ -86,7 +86,9 @@ enum class ShaderOpts {
     MAX
 };
 
-#define SHADER_OPT(opt) ((uint64_t)(1 << static_cast<int>(ShaderOpts::opt)))
+static_assert(static_cast<int>(ShaderOpts::MAX) <= 64,
+              "shader option mask exceeds its 64-bit storage");
+#define SHADER_OPT(opt) (uint64_t{1} << static_cast<int>(ShaderOpts::opt))
 #endif
 
 struct ColorCombinerKey {
@@ -145,7 +147,7 @@ class GfxWindowBackend;
 
 constexpr size_t MAX_SEGMENT_POINTERS = 16;
 constexpr size_t SHADER_ID_SHIFT = 17;
-constexpr int16_t ShaderIdUnmask(int id) {
+constexpr int16_t ShaderIdUnmask(uint64_t id) {
     return (id >> SHADER_ID_SHIFT) & 0xFFFF;
 }
 

@@ -114,13 +114,13 @@ class GfxRenderingAPIOGL final : public GfxRenderingAPI {
     std::vector<TextureInfo> textures;
     GLuint mCurrentTextureIds[SHADER_MAX_TEXTURES] = {};
     GLuint mLastBoundTextures[SHADER_MAX_TEXTURES] = {};
-    uint8_t mCurrentTile;
+    uint8_t mCurrentTile = 0;
     int8_t mLastActiveTexture = -1;
     int8_t mLastBlendEnabled = -1;
     int8_t mLastScissorEnabled = -1;
 
-    std::map<std::pair<uint64_t, uint32_t>, ShaderProgram> mShaderProgramPool;
-    ShaderProgram* mCurrentShaderProgram;
+    std::map<std::pair<uint64_t, uint64_t>, ShaderProgram> mShaderProgramPool;
+    ShaderProgram* mCurrentShaderProgram = nullptr;
     ShaderProgram* mLastLoadedShader = nullptr;
 
     GLuint mOpenglVbo = 0;

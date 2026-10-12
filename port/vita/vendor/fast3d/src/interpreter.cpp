@@ -1978,9 +1978,11 @@ void Interpreter::GfxSpTri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t vtx3_idx
     }
 
     if (!mShaderStack.empty()) {
-        cc_options |= (mShaderStack.top() << SHADER_ID_SHIFT);
+        cc_options |= static_cast<uint64_t>(
+                          static_cast<uint16_t>(mShaderStack.top()))
+                      << SHADER_ID_SHIFT;
     } else {
-        cc_options |= -1 << SHADER_ID_SHIFT;
+        cc_options |= ~uint64_t{0} << SHADER_ID_SHIFT;
     }
 
     if (mRdp->loaded_texture[0].masked) {
@@ -1996,7 +1998,11 @@ void Interpreter::GfxSpTri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t vtx3_idx
         cc_options |= SHADER_OPT(TEXEL1_BLEND);
     }
 
-    ColorCombinerKey key;
+    // shader_id is retained in this upstream key type for custom-shader
+    // implementations, but this backend encodes that ID in options. Leaving
+    // the extra field uninitialized made std::map ordering and cache hits
+    // depend on stack garbage, causing duplicate shader compilation.
+    ColorCombinerKey key{};
     key.combine_mode = mRdp->combine_mode;
     key.options = cc_options;
 
