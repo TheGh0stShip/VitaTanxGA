@@ -102,9 +102,20 @@ void GfxRenderingAPIOGL::UnloadShader(ShaderProgram* old_prg) {
 }
 
 void GfxRenderingAPIOGL::LoadShader(ShaderProgram* new_prg) {
-    // if (!new_prg) return;
+    if (new_prg == nullptr) return;
     mCurrentShaderProgram = new_prg;
     if (new_prg != mLastLoadedShader) {
+        // Attribute enables are VAO/global state in this backend.  Programs
+        // use different packed vertex layouts, so leaving attributes from the
+        // previous shader enabled makes VitaGL fetch stale streams with the
+        // new stride when a cached program is selected again.
+        if (mLastLoadedShader != nullptr) {
+            for (unsigned int i = 0; i < mLastLoadedShader->numAttribs; ++i) {
+                if (mLastLoadedShader->attribLocations[i] >= 0) {
+                    glDisableVertexAttribArray(mLastLoadedShader->attribLocations[i]);
+                }
+            }
+        }
         glUseProgram(new_prg->openglProgramId);
         VertexArraySetAttribs(new_prg);
         mLastLoadedShader = new_prg;
