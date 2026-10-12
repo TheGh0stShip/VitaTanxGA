@@ -3,7 +3,7 @@ ROM ?= baseroms/us/baserom.z64
 VITA_ASSETS := assets/extracted/us/vita
 VITA_BUILD := port/vita/build
 
-.PHONY: all verify-rom runtime-test runtime-asset-test runtime-script-asset-test runtime-campaign-asset-test vita-assets vita vita-recomp-bootstrap vita-recomp-prepare vita-recomp-check vita-recomp-runtime-check vita-recomp-app vita-check clean
+.PHONY: all verify-rom runtime-test runtime-asset-test runtime-script-asset-test runtime-campaign-asset-test vita-assets vita vita-legacy vita-recomp-bootstrap vita-recomp-prepare vita-recomp-check vita-recomp-runtime-check vita-recomp-app vita-check clean
 
 all: vita-check
 
@@ -78,7 +78,7 @@ vita-assets: verify-rom
 	$(PYTHON) tools/inventory_script_assets.py --rom $(ROM) --output $(VITA_ASSETS)/scripts_manifest.json --extract-dir $(VITA_ASSETS)/scripts
 	$(PYTHON) tools/inventory_libmus_assets.py --rom $(ROM) --output $(VITA_ASSETS)/libmus_manifest.json --extract-dir $(VITA_ASSETS)/libmus
 
-vita: vita-assets
+vita-legacy: vita-assets
 	@test -n "$(VITASDK)" || (echo "Set VITASDK to your VitaSDK installation" >&2; exit 2)
 	cmake -S port/vita -B $(VITA_BUILD) -DCMAKE_BUILD_TYPE=Release
 	cmake --build $(VITA_BUILD)
@@ -152,13 +152,12 @@ vita-recomp-app: vita-recomp-prepare
 		grep -q 'eboot.bin' || exit 1
 	@echo "Built full translated-game VPK: $(VITA_BUILD)-full-recomp/VitaTanxGA-recomp.vpk"
 
-vita-check: runtime-test runtime-asset-test runtime-script-asset-test runtime-campaign-asset-test vita
-	port/vita/verify_elf.sh $(VITA_BUILD)/vitatanxga \
-		$(VITASDK)/arm-vita-eabi/lib/libvita2d.a \
-		$(VITASDK)/arm-vita-eabi/lib/libpng.a \
-		$(VITASDK)/arm-vita-eabi/lib/libjpeg.a \
-		$(VITASDK)/arm-vita-eabi/lib/libfreetype.a \
-		$(VITASDK)/arm-vita-eabi/lib/libz.a
+vita: vita-recomp-app
+
+# The primary gate builds the real translated game exactly once.  The portable
+# prototype and its extracted-asset tests remain available through
+# `make vita-legacy` and the explicit runtime test targets.
+vita-check: vita
 
 clean:
 	$(RM) -r $(VITA_ASSETS) $(VITA_BUILD)

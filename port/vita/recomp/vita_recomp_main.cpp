@@ -1,10 +1,12 @@
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <cstring>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -30,24 +32,89 @@ constexpr std::size_t kRomSize = 8U * 1024U * 1024U;
 constexpr std::size_t kRdramSize = 64U * 1024U * 1024U;
 constexpr std::size_t kAudioFrames = 1024;
 constexpr std::size_t kAudioRingFrames = 16384;
+constexpr std::uint8_t kExpectedSha1[20] = {
+    0x80, 0x52, 0x48, 0xfb, 0x0a, 0x0e, 0xe6, 0x94, 0xca, 0xd8,
+    0xd7, 0xdc, 0x92, 0x7b, 0x63, 0x1d, 0x86, 0x0d, 0xd8, 0xcf,
+};
 std::uint16_t buttons;
 float stick_x;
 float stick_y;
 int audio_port = -1;
+std::mutex audio_port_mutex;
 std::atomic<bool> audio_running{false};
 std::int16_t audio_ring[kAudioRingFrames * 2]{};
 std::atomic<std::uint32_t> audio_read{0};
 std::atomic<std::uint32_t> audio_write{0};
 std::thread audio_thread;
 
+std::uint32_t rotate_left(std::uint32_t value, unsigned amount) {
+    return (value << amount) | (value >> (32U - amount));
+}
+
+std::array<std::uint8_t, 20> sha1(const std::vector<std::uint8_t>& input) {
+    std::vector<std::uint8_t> message = input;
+    const std::uint64_t bit_count = static_cast<std::uint64_t>(message.size()) * 8U;
+    message.push_back(0x80);
+    while ((message.size() % 64U) != 56U) message.push_back(0);
+    for (int shift = 56; shift >= 0; shift -= 8) {
+        message.push_back(static_cast<std::uint8_t>(bit_count >> shift));
+    }
+    std::uint32_t h[5] = {0x67452301U, 0xEFCDAB89U, 0x98BADCFEU,
+                          0x10325476U, 0xC3D2E1F0U};
+    for (std::size_t block = 0; block < message.size(); block += 64U) {
+        std::uint32_t w[80]{};
+        for (unsigned i = 0; i < 16; ++i) {
+            const std::size_t p = block + i * 4U;
+            w[i] = (static_cast<std::uint32_t>(message[p]) << 24U) |
+                   (static_cast<std::uint32_t>(message[p + 1]) << 16U) |
+                   (static_cast<std::uint32_t>(message[p + 2]) << 8U) |
+                   message[p + 3];
+        }
+        for (unsigned i = 16; i < 80; ++i) {
+            w[i] = rotate_left(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
+        }
+        std::uint32_t a = h[0], b = h[1], c = h[2], d = h[3], e = h[4];
+        for (unsigned i = 0; i < 80; ++i) {
+            std::uint32_t f, k;
+            if (i < 20) { f = (b & c) | (~b & d); k = 0x5A827999U; }
+            else if (i < 40) { f = b ^ c ^ d; k = 0x6ED9EBA1U; }
+            else if (i < 60) { f = (b & c) | (b & d) | (c & d); k = 0x8F1BBCDCU; }
+            else { f = b ^ c ^ d; k = 0xCA62C1D6U; }
+            const std::uint32_t temp = rotate_left(a, 5) + f + e + k + w[i];
+            e = d; d = c; c = rotate_left(b, 30); b = a; a = temp;
+        }
+        h[0] += a; h[1] += b; h[2] += c; h[3] += d; h[4] += e;
+    }
+    std::array<std::uint8_t, 20> digest{};
+    for (unsigned i = 0; i < 5; ++i) {
+        digest[i * 4] = static_cast<std::uint8_t>(h[i] >> 24U);
+        digest[i * 4 + 1] = static_cast<std::uint8_t>(h[i] >> 16U);
+        digest[i * 4 + 2] = static_cast<std::uint8_t>(h[i] >> 8U);
+        digest[i * 4 + 3] = static_cast<std::uint8_t>(h[i]);
+    }
+    return digest;
+}
+
+void log_message(const char* message) {
+    std::printf("VitaTanxGA: %s\n", message);
+    FILE* log = std::fopen("ux0:data/VitaTanxGA/runtime.log", "ab");
+    if (log != nullptr) {
+        std::fprintf(log, "%s\n", message);
+        std::fclose(log);
+    }
+}
+
 bool load_rom(std::vector<std::uint8_t>& bytes) {
     FILE* file = std::fopen("ux0:data/VitaTanxGA/baserom.z64", "rb");
     if (file == nullptr) return false;
     bytes.resize(kRomSize);
-    const bool good = std::fread(bytes.data(), 1, bytes.size(), file) == bytes.size() &&
-        std::fgetc(file) == EOF && bytes[0] == 0x80 && bytes[1] == 0x37 &&
-        bytes[2] == 0x12 && bytes[3] == 0x40;
+    const bool complete = std::fread(bytes.data(), 1, bytes.size(), file) == bytes.size() &&
+                          std::fgetc(file) == EOF;
     std::fclose(file);
+    const auto digest = complete ? sha1(bytes) : std::array<std::uint8_t, 20>{};
+    const bool good = complete && bytes[0] == 0x80 && bytes[1] == 0x37 &&
+                      bytes[2] == 0x12 && bytes[3] == 0x40 &&
+                      std::equal(digest.begin(), digest.end(), kExpectedSha1);
     if (!good) bytes.clear();
     return good;
 }
@@ -87,7 +154,13 @@ bool get_input(int controller, std::uint16_t* out_buttons, float* x, float* y) {
     *out_buttons = buttons; *x = stick_x; *y = stick_y;
     return true;
 }
-void set_rumble(int, bool) {}
+void set_rumble(int controller, bool enabled) {
+    if (controller != 0) return;
+    SceCtrlActuator actuator{};
+    actuator.small = enabled ? 0x80 : 0;
+    actuator.large = enabled ? 0xFF : 0;
+    sceCtrlSetActuator(0, &actuator);
+}
 ultramodern::input::connected_device_info_t connected_device(int controller) {
     using ultramodern::input::Device;
     using ultramodern::input::Pak;
@@ -110,16 +183,23 @@ void run_audio() {
             }
         }
         audio_read.store(read, std::memory_order_release);
-        sceAudioOutOutput(audio_port, block);
+        std::lock_guard lock{audio_port_mutex};
+        if (audio_port >= 0) sceAudioOutOutput(audio_port, block);
+        else ultramodern::sleep_milliseconds(2);
     }
 }
 
 void set_audio_frequency(std::uint32_t frequency) {
+    std::lock_guard lock{audio_port_mutex};
     if (audio_port >= 0) sceAudioOutReleasePort(audio_port);
     audio_port = sceAudioOutOpenPort(SCE_AUDIO_OUT_PORT_TYPE_MAIN, kAudioFrames,
                                      frequency, SCE_AUDIO_OUT_MODE_STEREO);
-    sceAudioOutSetConfig(audio_port, kAudioFrames, frequency,
-                         SCE_AUDIO_OUT_MODE_STEREO);
+    if (audio_port >= 0) {
+        sceAudioOutSetConfig(audio_port, kAudioFrames, frequency,
+                             SCE_AUDIO_OUT_MODE_STEREO);
+    } else {
+        log_message("audio output could not be opened");
+    }
 }
 void queue_audio(std::int16_t* samples, std::size_t sample_count) {
     const std::size_t frames = sample_count / 2;
@@ -145,7 +225,7 @@ RspUcodeFunc* get_rsp_microcode(const OSTask* task) {
 }
 void on_vi() {}
 void on_gfx_init() {}
-void show_error(const char*) {}
+void show_error(const char* message) { log_message(message ? message : "runtime error"); }
 std::string thread_name(const OSThread* thread) {
     return "BTGA-" + std::to_string(thread->id);
 }
@@ -153,11 +233,16 @@ std::string thread_name(const OSThread* thread) {
 
 int main() {
     sceIoMkdir("ux0:data/VitaTanxGA", 0777);
+    std::remove("ux0:data/VitaTanxGA/runtime.log");
+    log_message("starting translated-game runtime");
     std::vector<std::uint8_t> rom;
-    if (!load_rom(rom)) return 2;
+    if (!load_rom(rom)) {
+        log_message("baserom.z64 is missing or is not the supported USA Rev 0 ROM");
+        return 2;
+    }
     auto rdram = std::unique_ptr<std::uint8_t, decltype(&std::free)>(
         static_cast<std::uint8_t*>(std::calloc(1, kRdramSize)), &std::free);
-    if (!rdram) return 3;
+    if (!rdram) { log_message("64 MiB guest memory allocation failed"); return 3; }
     recomp::set_rom_contents(std::move(rom));
     recomp::do_rom_read(rdram.get(),
                         static_cast<gpr>(static_cast<std::int32_t>(0x80071000U)),
@@ -171,7 +256,10 @@ int main() {
 
     sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG_WIDE);
     if (!vglInitExtended(0, 960, 544, 0x1800000,
-                         SCE_GXM_MULTISAMPLE_NONE)) return 4;
+                         SCE_GXM_MULTISAMPLE_NONE)) {
+        log_message("vitaGL initialization failed");
+        return 4;
+    }
     const recomp::rsp::callbacks_t rsp_select{get_rsp_microcode};
     recomp::rsp::set_callbacks(rsp_select);
     const ultramodern::rsp::callbacks_t rsp{
@@ -203,6 +291,12 @@ int main() {
     ultramodern::join_saving_thread();
     audio_running.store(false);
     if (audio_thread.joinable()) audio_thread.join();
-    if (audio_port >= 0) sceAudioOutReleasePort(audio_port);
+    set_rumble(0, false);
+    {
+        std::lock_guard lock{audio_port_mutex};
+        if (audio_port >= 0) sceAudioOutReleasePort(audio_port);
+        audio_port = -1;
+    }
+    log_message("runtime stopped cleanly");
     return 0;
 }
