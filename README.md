@@ -23,7 +23,8 @@ The repository currently produces an installable PS Vita VPK that:
 - creates the full five-tank opposing formation from the recovered team spawn table, with steering,
   pursuit, firing, projectile ownership, hit detection, and damage;
 - resolves and renders all 41 first-mission pickup placements through the
-  recovered pickup-kind/model table and original textured common-world models;
+  recovered pickup-kind/model table and original textured common-world models,
+  with retail health, ammunition, weapon inventory, tank-buck, and radar effects;
 - derives navigation heights from the placed retail level geometry;
 - loads and validates the first extracted world's big-endian component tables;
 - packages decoded worlds, shared world pools, images, scripts, and libmus

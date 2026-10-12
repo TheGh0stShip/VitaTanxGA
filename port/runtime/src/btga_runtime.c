@@ -86,6 +86,7 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
     float follow_y;
     float follow_z;
     unsigned int index;
+    if (runtime->pickup_message_ticks != 0) runtime->pickup_message_ticks--;
     runtime->player.yaw += steering * (0.018f + fabsf(throttle) * 0.032f);
     runtime->player.turret_yaw += (float)input->aim_x / 32768.0f * 0.055f;
     runtime->player.velocity += (target_velocity - runtime->player.velocity) * 0.16f;
@@ -106,6 +107,49 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
                          runtime->player.z,
                          runtime->player.yaw + runtime->player.turret_yaw, 0);
     update_enemies(runtime);
+    for (index = 0; index < runtime->pickup_count; index++) {
+        BtgaPickup *pickup = &runtime->pickups[index];
+        float dx = pickup->x - runtime->player.x;
+        float dz = pickup->z - runtime->player.z;
+        if (!pickup->active || dx * dx + dz * dz > 4900.0f) continue;
+        pickup->active = false;
+        runtime->last_pickup_kind = pickup->kind;
+        runtime->pickup_message_ticks = 90;
+        switch (pickup->kind) {
+            case 1: case 2: case 3: case 9: case 10: case 17:
+                runtime->pickup_inventory[pickup->kind] += 5;
+                break;
+            case 4: runtime->pickup_inventory[4] += 2; break;
+            case 5: runtime->pickup_inventory[5] += 1; break;
+            case 6: case 14: runtime->pickup_inventory[pickup->kind] += 20; break;
+            case 7:
+                if (runtime->player.health < runtime->player.max_health) {
+                    uint16_t health = (uint16_t)(runtime->player.health + 30);
+                    runtime->player.health = health > runtime->player.max_health
+                        ? runtime->player.max_health : health;
+                } else runtime->pickup_inventory[11]++;
+                break;
+            case 8:
+                runtime->player.ammo = runtime->player.ammo + 16u > runtime->player.max_ammo
+                    ? runtime->player.max_ammo : (uint16_t)(runtime->player.ammo + 16u);
+                runtime->player.health = runtime->player.health + 15u > runtime->player.max_health
+                    ? runtime->player.max_health : (uint16_t)(runtime->player.health + 15u);
+                break;
+            case 11:
+                runtime->player.ammo = runtime->player.ammo +
+                    runtime->player.max_ammo / 3u > runtime->player.max_ammo
+                    ? runtime->player.max_ammo
+                    : (uint16_t)(runtime->player.ammo + runtime->player.max_ammo / 3u);
+                break;
+            case 12: runtime->pickup_inventory[12] += 5; break;
+            case 13: runtime->pickup_inventory[13] = 100; break;
+            case 15: runtime->pickup_inventory[15] += 100; break;
+            case 16: runtime->pickup_inventory[16] += 2; break;
+            case 18: runtime->pickup_inventory[18] += 5; break;
+            case 19: runtime->pickup_inventory[19] = 1; break;
+            default: break;
+        }
+    }
     for (index = 0; index < BTGA_MAX_PROJECTILES; index++) {
         BtgaProjectile *projectile = &runtime->projectiles[index];
         if (!projectile->active) continue;
@@ -160,6 +204,35 @@ uint32_t btga_runtime_active_enemies(const BtgaRuntime *runtime) {
     return count;
 }
 
+uint32_t btga_runtime_active_pickups(const BtgaRuntime *runtime) {
+    uint32_t count = 0;
+    unsigned int index;
+    if (runtime == NULL) return 0;
+    for (index = 0; index < runtime->pickup_count; index++)
+        if (runtime->pickups[index].active) count++;
+    return count;
+}
+
+const char *btga_runtime_pickup_name(uint8_t kind) {
+    static const char *const names[BTGA_PICKUP_KIND_COUNT] = {
+        "POWERUP", "SWARMERS", "LASERS", "GUIDED MISSILES", "GUN BUDDIES",
+        "NUKE", "MINES", "HEALTH", "STAR", "TELEPORTERS", "PLASMA BOLTS",
+        "AMMO", "TURBO", "SHIELDS", "BOUNCING BETTIES", "FLAMETHROWER",
+        "CLOAKING", "GRENADES", "TANK BUCKS", "RADAR",
+    };
+    return kind < BTGA_PICKUP_KIND_COUNT ? names[kind] : "POWERUP";
+}
+
+bool btga_runtime_add_pickup(BtgaRuntime *runtime, float x, float y, float z,
+                             uint8_t kind) {
+    BtgaPickup *pickup;
+    if (runtime == NULL || kind >= BTGA_PICKUP_KIND_COUNT ||
+        runtime->pickup_count >= BTGA_MAX_PICKUPS) return false;
+    pickup = &runtime->pickups[runtime->pickup_count++];
+    *pickup = (BtgaPickup){x, y, z, kind, true};
+    return true;
+}
+
 bool btga_runtime_add_enemy(BtgaRuntime *runtime, float x, float y, float z,
                             uint16_t yaw) {
     unsigned int index;
@@ -188,11 +261,16 @@ void btga_runtime_restart_mission(BtgaRuntime *runtime) {
     runtime->player.yaw = runtime->player_spawn_yaw;
     runtime->player.turret_yaw = 0.0f;
     runtime->player.velocity = 0.0f;
-    runtime->player.health = 100;
-    runtime->player.ammo = 200;
+    runtime->player.health = runtime->player.max_health;
+    runtime->player.ammo = runtime->player.max_ammo;
     runtime->player.fire_cooldown = 0;
     for (index = 0; index < BTGA_MAX_PROJECTILES; index++)
         runtime->projectiles[index].active = false;
+    for (index = 0; index < runtime->pickup_count; index++)
+        runtime->pickups[index].active = true;
+    for (index = 0; index < BTGA_PICKUP_KIND_COUNT; index++)
+        runtime->pickup_inventory[index] = 0;
+    runtime->pickup_message_ticks = 0;
     for (index = 0; index < BTGA_MAX_ENEMIES; index++) {
         BtgaEnemy *enemy = &runtime->enemies[index];
         if (!enemy->configured) continue;
@@ -257,7 +335,10 @@ void btga_runtime_init(BtgaRuntime *runtime, bool assets_ready) {
 
     *runtime = (BtgaRuntime){
         .camera = {0.0f, 180.0f, 246.0f, 0.0f, -0.42f},
-        .player = {0.0f, 0.0f, 576.0f, 0.0f, 0.0f, 0.0f, 100, 200, 0},
+        .player = {
+            .x = 0.0f, .y = 0.0f, .z = 576.0f,
+            .health = 100, .ammo = 100, .max_health = 100, .max_ammo = 100,
+        },
         .world_min_x = -9000.0f,
         .world_min_z = -9000.0f,
         .world_max_x = 9000.0f,

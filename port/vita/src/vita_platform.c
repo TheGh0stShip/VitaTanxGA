@@ -547,6 +547,8 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
     for (pickup_index = 0; pickup_index < s_pickup_count; pickup_index++) {
         uint16_t spin = (uint16_t)(runtime->simulation_ticks * 0x600u);
         const BtgaWorldPickup *pickup = &s_pickups[pickup_index];
+        if (pickup_index >= runtime->pickup_count ||
+            !runtime->pickups[pickup_index].active) continue;
         if (!btga_model_visit(&s_common_components,
                               s_pickup_model_indices[pickup_index], 0,
                               pickup->x, pickup->y, pickup->z, spin,
@@ -650,6 +652,12 @@ const BtgaTerrain *vita_platform_terrain(void) {
 
 bool vita_platform_spawn(uint8_t row, uint8_t column, BtgaWorldSpawn *spawn) {
     return s_world_ready && btga_world_find_spawn(&s_spawn_components, row, column, spawn);
+}
+
+bool vita_platform_pickup(size_t index, BtgaWorldPickup *pickup) {
+    if (!s_world_ready || pickup == NULL || index >= s_pickup_count) return false;
+    *pickup = s_pickups[index];
+    return true;
 }
 
 bool vita_platform_intro_script(const uint8_t **data, size_t *size) {
@@ -760,12 +768,11 @@ void vita_platform_begin_frame(void) {
 
 void vita_platform_draw(const BtgaRuntime *runtime) {
     const BtgaWorldSummary *world = vita_platform_world_summary();
-    uint32_t visible_triangles = 0;
     vita2d_draw_rectangle(0, 0, 960, 544, kColorBlack);
     vita2d_draw_rectangle(54, 112, 8, 270, kColorOrange);
     if ((runtime->screen == BTGA_SCREEN_GAMEPLAY ||
          runtime->screen == BTGA_SCREEN_PAUSED) && s_world_ready) {
-        visible_triangles = draw_world(runtime);
+        draw_world(runtime);
         draw_actors(runtime);
     }
     if (runtime->screen == BTGA_SCREEN_TITLE) {
@@ -798,12 +805,16 @@ void vita_platform_draw(const BtgaRuntime *runtime) {
     } else if (runtime->screen == BTGA_SCREEN_GAMEPLAY ||
                runtime->screen == BTGA_SCREEN_PAUSED) {
         vita2d_pgf_draw_textf(s_font, 18, 30, kColorWhite, 0.64f,
-                              "ARMOR %u   AMMO %u   ENEMY %lu   MESH %lu",
+                              "ARMOR %u   AMMO %u   ENEMY %lu   PICKUP %lu",
                               runtime->player.health, runtime->player.ammo,
                               (unsigned long)btga_runtime_active_enemies(runtime),
-                              (unsigned long)visible_triangles);
+                              (unsigned long)btga_runtime_active_pickups(runtime));
         vita2d_pgf_draw_text(s_font, 18, 52, kColorGray, 0.55f,
                              "LEFT: drive  RIGHT: turret  R: fire  START: pause");
+        if (runtime->pickup_message_ticks != 0)
+            vita2d_pgf_draw_textf(s_font, 330, 500, kColorOrange, 0.72f,
+                                  "PICKED UP %s",
+                                  btga_runtime_pickup_name(runtime->last_pickup_kind));
         if (runtime->screen == BTGA_SCREEN_PAUSED) {
             vita2d_draw_rectangle(300, 190, 360, 150, RGBA8(8, 11, 16, 220));
             vita2d_pgf_draw_text(s_font, 410, 245, kColorWhite, 1.1f, "PAUSED");

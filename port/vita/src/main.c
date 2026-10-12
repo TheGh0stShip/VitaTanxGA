@@ -33,6 +33,13 @@ int main(void) {
                                        spawn.yaw);
         }
     }
+    {
+        size_t index;
+        BtgaWorldPickup pickup;
+        for (index = 0; vita_platform_pickup(index, &pickup); index++)
+            btga_runtime_add_pickup(&runtime, pickup.x, pickup.y, pickup.z,
+                                    pickup.kind);
+    }
     previous_time = vita_platform_now_us();
 
     while (runtime.running) {

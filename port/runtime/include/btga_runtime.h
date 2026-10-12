@@ -49,6 +49,8 @@ typedef struct BtgaPlayer {
     float velocity;
     uint16_t health;
     uint16_t ammo;
+    uint16_t max_health;
+    uint16_t max_ammo;
     uint8_t fire_cooldown;
 } BtgaPlayer;
 
@@ -75,7 +77,18 @@ typedef struct BtgaEnemy {
     bool active;
 } BtgaEnemy;
 
-enum { BTGA_MAX_PROJECTILES = 32, BTGA_MAX_ENEMIES = 8 };
+typedef struct BtgaPickup {
+    float x, y, z;
+    uint8_t kind;
+    bool active;
+} BtgaPickup;
+
+enum {
+    BTGA_MAX_PROJECTILES = 32,
+    BTGA_MAX_ENEMIES = 8,
+    BTGA_MAX_PICKUPS = 64,
+    BTGA_PICKUP_KIND_COUNT = 20,
+};
 
 typedef struct BtgaRuntime {
     uint64_t simulation_ticks;
@@ -85,6 +98,11 @@ typedef struct BtgaRuntime {
     BtgaPlayer player;
     BtgaProjectile projectiles[BTGA_MAX_PROJECTILES];
     BtgaEnemy enemies[BTGA_MAX_ENEMIES];
+    BtgaPickup pickups[BTGA_MAX_PICKUPS];
+    uint16_t pickup_inventory[BTGA_PICKUP_KIND_COUNT];
+    uint8_t pickup_count;
+    uint8_t last_pickup_kind;
+    uint16_t pickup_message_ticks;
     const BtgaTerrain *terrain;
     float world_min_x;
     float world_min_z;
@@ -114,11 +132,15 @@ void btga_runtime_set_player_spawn(BtgaRuntime *runtime, float x, float y,
                                    float z, uint16_t yaw);
 bool btga_runtime_add_enemy(BtgaRuntime *runtime, float x, float y, float z,
                             uint16_t yaw);
+bool btga_runtime_add_pickup(BtgaRuntime *runtime, float x, float y, float z,
+                             uint8_t kind);
 bool btga_runtime_set_intro_script(BtgaRuntime *runtime, const uint8_t *data,
                                    size_t size);
 void btga_runtime_update(BtgaRuntime *runtime, const BtgaInput *input,
                          uint32_t elapsed_us);
 uint32_t btga_runtime_active_enemies(const BtgaRuntime *runtime);
+uint32_t btga_runtime_active_pickups(const BtgaRuntime *runtime);
+const char *btga_runtime_pickup_name(uint8_t kind);
 void btga_runtime_restart_mission(BtgaRuntime *runtime);
 
 #endif

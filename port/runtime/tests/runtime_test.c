@@ -19,6 +19,9 @@ int main(void) {
     assert(runtime.screen == BTGA_SCREEN_TITLE);
     assert(btga_runtime_add_enemy(&runtime, 100.0f, 0.0f, 200.0f, 0));
     assert(runtime.enemies[0].active && runtime.enemies[0].health == 100);
+    assert(btga_runtime_add_pickup(&runtime, 0.0f, 0.0f, 576.0f, 7));
+    assert(btga_runtime_add_pickup(&runtime, 0.0f, 0.0f, 576.0f, 1));
+    assert(btga_runtime_add_pickup(&runtime, 0.0f, 0.0f, 576.0f, 11));
     runtime.enemies[0].x = 50.0f;
     runtime.enemies[0].health = 25;
 
@@ -36,11 +39,16 @@ int main(void) {
     input.pressed = BTGA_BUTTON_CANCEL;
     btga_runtime_update(&runtime, &input, 0);
     assert(runtime.screen == BTGA_SCREEN_GAMEPLAY);
+    runtime.player.health = 50;
 
     input = (BtgaInput){.move_y = -32768, .pressed = BTGA_BUTTON_FIRE};
     btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US);
     assert(runtime.player.velocity > 0.0f);
-    assert(runtime.player.ammo == 199);
+    assert(runtime.player.ammo == 100);
+    assert(runtime.player.health == 80);
+    assert(runtime.pickup_inventory[1] == 5);
+    assert(btga_runtime_active_pickups(&runtime) == 0);
+    assert(runtime.last_pickup_kind == 11 && runtime.pickup_message_ticks != 0);
     assert(runtime.projectiles[0].active);
 
     input = (BtgaInput){.pressed = BTGA_BUTTON_START};
