@@ -540,6 +540,25 @@ void Interpreter::TextureCacheDelete(const uint8_t* origAddr) {
     }
 }
 
+void Interpreter::TextureCacheDeleteRange(const uint8_t* origAddr, uint32_t size) {
+    if (origAddr == nullptr || size == 0) return;
+
+    const uintptr_t begin = reinterpret_cast<uintptr_t>(origAddr);
+    const uintptr_t end = size > UINTPTR_MAX - begin ? UINTPTR_MAX : begin + size;
+    std::vector<const uint8_t*> addresses;
+    addresses.reserve(mTextureCache.map.size());
+
+    for (const auto& entry : mTextureCache.map) {
+        const uintptr_t address = reinterpret_cast<uintptr_t>(entry.first.texture_addr);
+        if (address >= begin && address < end) addresses.push_back(entry.first.texture_addr);
+    }
+
+    // TextureCacheDelete removes every format/palette variant at an exact
+    // address. Duplicate addresses are harmless and keep mutation out of the
+    // map traversal above, whose iterators are invalidated by robin_hood erase.
+    for (const uint8_t* address : addresses) TextureCacheDelete(address);
+}
+
 // Pick the per-line byte width for texture decode. Prefer the DRAM stride from
 // loaded_texture when it looks like real per-line info (differs from total size).
 // Fall back to the TMEM tile stride when loaded sizes match total (LoadBlock with

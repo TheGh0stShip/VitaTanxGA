@@ -265,7 +265,7 @@ bool Fast3DMemoryBridge::StageTextureImage(u32 requiredBytes, bool palette, u32 
                 stage->hash[2] != hash[2] || stage->hash[3] != hash[3])) {
         if (mInterpreter) {
             if (palette) mInterpreter->TextureCacheClear();
-            else mInterpreter->TextureCacheDelete(stage->data);
+            else mInterpreter->TextureCacheDeleteRange(stage->data, stage->size);
         }
         copyTexture(stage->data);
         stage->hash[0] = hash[0];
