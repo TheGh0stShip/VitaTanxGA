@@ -5709,6 +5709,11 @@ void Interpreter::EndFrame() {
         // The desktop backend hands mGfxFrameBuffer to its GUI compositor.
         // Vita has no such layer, so resolve the native-resolution game FBO
         // directly into the configured output viewport before presenting.
+        // vitaGL's blit installs a private GXM program and texture directly.
+        // Drop Fast3D's cached program before that external state change so
+        // the first draw of the next frame performs a complete rebind.
+        mRapi->UnloadShader(mRenderingState.mShaderProgram);
+        mRenderingState.mShaderProgram = nullptr;
         mRapi->StartDrawToFramebuffer(0, 1.0f);
         mRapi->ClearFramebuffer(true, true);
         mRapi->CopyFramebuffer(0, mGameFb,
@@ -5721,6 +5726,9 @@ void Interpreter::EndFrame() {
                                    static_cast<int>(mGameWindowViewport.width),
                                mGameWindowViewport.y +
                                    static_cast<int>(mGameWindowViewport.height));
+        mRapi->InvalidateExternalState();
+        mRdp->textures_changed[0] = true;
+        mRdp->textures_changed[1] = true;
     }
     mRapi->EndFrame();
     mWapi->SwapBuffersBegin();

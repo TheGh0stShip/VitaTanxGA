@@ -53,6 +53,9 @@ class GfxRenderingAPI {
     virtual void StartFrame() = 0;
     virtual void EndFrame() = 0;
     virtual void FinishRender() = 0;
+    // Notify the backend when platform code has issued rendering commands
+    // outside the normal shader/texture state cache.
+    virtual void InvalidateExternalState() {}
     virtual int CreateFramebuffer() = 0;
     virtual void UpdateFramebufferParameters(int fb_id, uint32_t width, uint32_t height,
                                              bool opengl_invertY, bool render_target, bool has_depth_buffer,
