@@ -46,6 +46,7 @@ int main(void) {
     btga_runtime_update(&runtime, &input, 0);
     assert(runtime.screen == BTGA_SCREEN_INTRO);
     assert(runtime.enemies[0].x == 100.0f && runtime.enemies[0].health == 100);
+    assert(runtime.enemies[0].turret_yaw == 0.0f);
     input.pressed = BTGA_BUTTON_CANCEL;
     btga_runtime_update(&runtime, &input, 0);
     assert(runtime.screen == BTGA_SCREEN_BRIEFING);
@@ -53,9 +54,11 @@ int main(void) {
     btga_runtime_update(&runtime, &input, 0);
     assert(runtime.screen == BTGA_SCREEN_GAMEPLAY);
     runtime.player.health = 50;
+    runtime.enemies[0].yaw = 1.0f;
 
     input = (BtgaInput){.move_y = -32768, .pressed = BTGA_BUTTON_FIRE};
     btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US);
+    assert(runtime.enemies[0].turret_yaw != 0.0f);
     assert(runtime.player.velocity > 0.0f);
     assert(runtime.player.ammo == 100);
     assert(runtime.player.health == 80);

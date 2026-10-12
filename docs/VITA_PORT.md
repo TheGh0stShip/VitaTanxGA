@@ -55,7 +55,10 @@ RGBA, including alpha, so its black border remains transparent in the Vita
 alpha pass. Tank body, turret, tread, and color-detail layers are resolved
 through the original common-world model-ID table and rendered from retail
 geometry, materials, and textures. The hostiles use the distinct recovered
-six-part tank-kind-4 definition instead of the player's M1A1. The companion
+six-part tank-kind-4 definition instead of the player's M1A1. Campaign team
+IDs select the four recovered environment-color entries for tank materials,
+and hostile turret-transformed parts track and fire at their target separately
+from the hull. The companion
 world is also decoded for entry type 7 placements; all 41 first-mission
 pickups resolve through the
 retail 20-entry gameplay model table, load their common-world textures, and

@@ -50,7 +50,7 @@ static void update_enemies(BtgaRuntime *runtime) {
     unsigned int index;
     for (index = 0; index < BTGA_MAX_ENEMIES; index++) {
         BtgaEnemy *enemy = &runtime->enemies[index];
-        float dx, dz, distance, target_yaw, turn;
+        float dx, dz, distance, target_yaw, turn, turret_turn;
         float target_x = runtime->player.x;
         float target_z = runtime->player.z;
         unsigned int target_index;
@@ -98,6 +98,12 @@ static void update_enemies(BtgaRuntime *runtime) {
         target_yaw = atan2f(dx, dz);
         turn = clampf(angle_delta(target_yaw, enemy->yaw), -0.035f, 0.035f);
         enemy->yaw += turn;
+        turret_turn = clampf(angle_delta(target_yaw,
+                                         enemy->yaw + enemy->turret_yaw),
+                              -0.07f, 0.07f);
+        enemy->turret_yaw += turret_turn;
+        enemy->turret_yaw = angle_delta(enemy->yaw + enemy->turret_yaw,
+                                        enemy->yaw);
         enemy->velocity += ((distance > 420.0f ? 20.0f : 0.0f) - enemy->velocity) * 0.1f;
         enemy->x += sinf(enemy->yaw) * enemy->velocity;
         enemy->z += cosf(enemy->yaw) * enemy->velocity;
@@ -109,10 +115,13 @@ static void update_enemies(BtgaRuntime *runtime) {
                 enemy->y = height;
         }
         if (enemy->fire_cooldown != 0) enemy->fire_cooldown--;
-        if (distance < 1400.0f && fabsf(angle_delta(target_yaw, enemy->yaw)) < 0.12f &&
+        if (distance < 1400.0f &&
+            fabsf(angle_delta(target_yaw,
+                              enemy->yaw + enemy->turret_yaw)) < 0.12f &&
             enemy->fire_cooldown == 0) {
             spawn_projectile(runtime, enemy->x, enemy->y, enemy->z,
-                             enemy->yaw, (uint8_t)(index + 1),
+                             enemy->yaw + enemy->turret_yaw,
+                             (uint8_t)(index + 1),
                              enemy->allied ? 0 : 1);
             enemy->fire_cooldown = 45;
         }
@@ -373,6 +382,7 @@ void btga_runtime_restart_mission(BtgaRuntime *runtime) {
         enemy->y = enemy->spawn_y;
         enemy->z = enemy->spawn_z;
         enemy->yaw = enemy->spawn_yaw;
+        enemy->turret_yaw = 0.0f;
         enemy->velocity = 0.0f;
         enemy->health = 100;
         enemy->fire_cooldown = 30;

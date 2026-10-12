@@ -70,6 +70,7 @@ typedef struct BtgaProjectile {
 typedef struct BtgaEnemy {
     float x, y, z;
     float yaw;
+    float turret_yaw;
     float spawn_x, spawn_y, spawn_z;
     float spawn_yaw;
     float velocity;

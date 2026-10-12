@@ -742,8 +742,11 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
         model_indices = enemy->tank_kind == 4 ? s_enemy_model_indices :
                                                 s_player_model_indices;
         for (tank_part = 0; tank_part < tank->part_count; tank_part++) {
-            float part_turn = fmodf(enemy->yaw, 6.28318530718f);
+            float part_turn = enemy->yaw;
             uint16_t part_yaw;
+            if (tank->parts[tank_part].turret_transform)
+                part_turn += enemy->turret_yaw;
+            part_turn = fmodf(part_turn, 6.28318530718f);
             if (part_turn < 0.0f) part_turn += 6.28318530718f;
             part_yaw = (uint16_t)(part_turn * (65536.0f / 6.28318530718f));
             if (!btga_model_visit(&s_common_components,

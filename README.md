@@ -28,8 +28,9 @@ The repository currently produces an installable PS Vita VPK that:
   reorder, creating SF Airport's three configured hostile tank-kind-4 actors
   at spawn slots 2, 3, and 4 instead of activating every placement marker;
 - renders those enemies with their own recovered six-part vehicle definition,
-  with steering, pursuit, firing, projectile ownership, hit detection, damage,
-  and enemy-only mission completion;
+  retail campaign team colors, independently tracking turret parts, steering,
+  pursuit, firing along the turret heading, projectile ownership, hit detection,
+  damage, and enemy-only mission completion;
 - resolves and renders all 41 first-mission pickup placements through the
   recovered pickup-kind/model table and original textured common-world models,
   with retail health, ammunition, weapon inventory, tank-buck, and radar effects;
