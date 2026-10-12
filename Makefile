@@ -3,7 +3,7 @@ ROM ?= baseroms/us/baserom.z64
 VITA_ASSETS := assets/extracted/us/vita
 VITA_BUILD := port/vita/build
 
-.PHONY: all verify-rom runtime-test runtime-asset-test vita-assets vita vita-check clean
+.PHONY: all verify-rom runtime-test runtime-asset-test runtime-script-asset-test vita-assets vita vita-check clean
 
 all: vita-check
 
@@ -14,11 +14,13 @@ runtime-test:
 	$(CC) -std=c11 -Wall -Wextra -Werror -Wpedantic \
 		-Iport/runtime/include port/runtime/src/btga_runtime.c \
 		port/runtime/src/btga_tank.c \
+		port/runtime/src/btga_script.c \
 		port/runtime/src/btga_world.c port/runtime/src/btga_geometry.c \
 		port/runtime/src/btga_scene.c port/runtime/src/btga_view.c \
 		port/runtime/src/btga_terrain.c port/runtime/src/btga_material.c \
 		port/runtime/src/btga_texture.c \
 		port/runtime/tests/tank_test.c \
+		port/runtime/tests/script_test.c \
 		port/runtime/tests/runtime_test.c port/runtime/tests/world_test.c \
 		port/runtime/tests/geometry_test.c port/runtime/tests/view_test.c \
 		port/runtime/tests/material_test.c \
@@ -40,6 +42,14 @@ runtime-asset-test: vita-assets
 		$(VITA_ASSETS)/world-pools/texture.bin \
 		$(VITA_ASSETS)/worlds/common_world
 
+runtime-script-asset-test: vita-assets
+	$(CC) -std=c11 -Wall -Wextra -Werror -Wpedantic \
+		-Iport/runtime/include port/runtime/src/btga_script.c \
+		port/runtime/tests/script_asset_test.c \
+		-o /tmp/vitatanxga-script-asset-test
+	/tmp/vitatanxga-script-asset-test \
+		$(VITA_ASSETS)/scripts/script_00_514720/stream_*.bin
+
 vita-assets: verify-rom
 	$(PYTHON) tools/extract_world_pools.py $(VITA_ASSETS)/world-pools --rom $(ROM)
 	$(PYTHON) tools/inventory_lzari_assets.py --rom $(ROM) --output $(VITA_ASSETS)/lzari_manifest.json --extract-dir $(VITA_ASSETS)/lzari --split-bundles
@@ -54,7 +64,7 @@ vita: vita-assets
 	cmake -S port/vita -B $(VITA_BUILD) -DCMAKE_BUILD_TYPE=Release
 	cmake --build $(VITA_BUILD)
 
-vita-check: runtime-test runtime-asset-test vita
+vita-check: runtime-test runtime-asset-test runtime-script-asset-test vita
 	port/vita/verify_elf.sh $(VITA_BUILD)/vitatanxga \
 		$(VITASDK)/arm-vita-eabi/lib/libvita2d.a \
 		$(VITASDK)/arm-vita-eabi/lib/libpng.a \

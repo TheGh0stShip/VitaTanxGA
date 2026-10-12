@@ -8,6 +8,7 @@ int btga_view_tests(void);
 int btga_material_tests(void);
 int btga_texture_tests(void);
 int btga_tank_tests(void);
+int btga_script_tests(void);
 
 int main(void) {
     BtgaRuntime runtime;
@@ -49,5 +50,6 @@ int main(void) {
     btga_material_tests();
     btga_texture_tests();
     btga_tank_tests();
+    btga_script_tests();
     return 0;
 }

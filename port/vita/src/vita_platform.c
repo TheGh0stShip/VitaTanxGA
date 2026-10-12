@@ -3,6 +3,7 @@
 #include "btga_material.h"
 #include "btga_texture.h"
 #include "btga_tank.h"
+#include "btga_script.h"
 
 #include <psp2/ctrl.h>
 #include <psp2/kernel/processmgr.h>
@@ -24,6 +25,8 @@ static vita2d_pgf *s_font;
 static uint32_t s_previous_buttons;
 static BtgaWorldSummary s_world_summary;
 static bool s_world_ready;
+static uint16_t s_mission_stream_count;
+static uint32_t s_mission_command_count;
 
 typedef struct LoadedFile {
     uint8_t *data;
@@ -220,6 +223,42 @@ static bool load_file(const char *path, LoadedFile *loaded) {
         return false;
     }
     fclose(file);
+    return true;
+}
+
+static bool validate_first_mission(void) {
+    LoadedFile header = {0};
+    uint8_t scene_type, scene_setting;
+    uint16_t stream_count;
+    uint32_t command_count = 0;
+    unsigned int index;
+    if (!load_file("app0:assets/scripts/script_00_514720/header.bin", &header) ||
+        !btga_script_header(header.data, header.size, &scene_type, &scene_setting,
+                            &stream_count) || stream_count != 41 ||
+        scene_type != 1 || scene_setting != 1) {
+        free(header.data);
+        return false;
+    }
+    free(header.data);
+    for (index = 0; index < stream_count; index++) {
+        char path[96];
+        LoadedFile stream = {0};
+        BtgaScriptStreamSummary summary;
+        int length = snprintf(path, sizeof(path),
+                              "app0:assets/scripts/script_00_514720/stream_%03u.bin",
+                              index);
+        if (length < 0 || (size_t)length >= sizeof(path) ||
+            !load_file(path, &stream) ||
+            !btga_script_stream_validate(stream.data, stream.size, &summary)) {
+            free(stream.data);
+            return false;
+        }
+        command_count += summary.command_count;
+        free(stream.data);
+    }
+    if (command_count != 23483) return false;
+    s_mission_stream_count = stream_count;
+    s_mission_command_count = command_count;
     return true;
 }
 
@@ -543,7 +582,7 @@ bool vita_platform_startup(void) {
         vita2d_fini();
         return false;
     }
-    s_world_ready = load_first_world();
+    s_world_ready = load_first_world() && validate_first_mission();
     return true;
 }
 
@@ -650,6 +689,12 @@ void vita_platform_draw(const BtgaRuntime *runtime) {
                                   "Loaded: %lu placements, %lu models",
                                   (unsigned long)world->placement_count,
                                   (unsigned long)world->model_count);
+        }
+        if (s_mission_stream_count != 0) {
+            vita2d_pgf_draw_textf(s_font, 90, 376, kColorGray, 0.60f,
+                                  "Mission data: %u streams, %lu commands",
+                                  s_mission_stream_count,
+                                  (unsigned long)s_mission_command_count);
         }
     } else if (runtime->screen == BTGA_SCREEN_GAMEPLAY ||
                runtime->screen == BTGA_SCREEN_PAUSED) {
