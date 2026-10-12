@@ -30,6 +30,15 @@ behavior, mission scripting, full tank articulation and weapon rules, audio,
 the complete frontend, saving, and remaining platform services are still being
 ported from the recovered implementation.
 
+## Windows Vita3K captures
+
+These captures are from the repository VPK running in `D:\Vita3K`. They are
+emulator evidence, not a physical-hardware validation claim.
+
+![VitaTanx GA title screen in Windows Vita3K](docs/screenshots/vita3k-title.png)
+
+![VitaTanx GA gameplay rendering in Windows Vita3K](docs/screenshots/vita3k-gameplay.png)
+
 ## Requirements
 
 - A legally obtained USA Rev 0 BattleTanx: Global Assault ROM
@@ -53,6 +62,14 @@ Export VitaSDK and place the verified ROM at `baseroms/us/baserom.z64`:
 export VITASDK=/path/to/vitasdk
 export PATH="$VITASDK/bin:$PATH"
 make vita-check
+```
+
+To capture the current VPK with the Windows Vita3K installation:
+
+```powershell
+tools\capture_vita3k_windows.ps1 `
+  -VpkPath port\vita\build\vitatanxga.vpk `
+  -OutputDirectory docs\screenshots
 ```
 
 `make vita-check` performs the complete local pipeline:
