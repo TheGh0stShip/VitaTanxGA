@@ -3,12 +3,18 @@ ROM ?= baseroms/us/baserom.z64
 VITA_ASSETS := assets/extracted/us/vita
 VITA_BUILD := port/vita/build
 
-.PHONY: all verify-rom vita-assets vita vita-check clean
+.PHONY: all verify-rom runtime-test vita-assets vita vita-check clean
 
 all: vita-check
 
 verify-rom:
 	$(PYTHON) tools/verify_rom.py $(ROM)
+
+runtime-test:
+	$(CC) -std=c11 -Wall -Wextra -Werror -Wpedantic \
+		-Iport/runtime/include port/runtime/src/btga_runtime.c \
+		port/runtime/tests/runtime_test.c -o /tmp/vitatanxga-runtime-test
+	/tmp/vitatanxga-runtime-test
 
 vita-assets: verify-rom
 	$(PYTHON) tools/inventory_lzari_assets.py --rom $(ROM) --output $(VITA_ASSETS)/lzari_manifest.json --extract-dir $(VITA_ASSETS)/lzari --split-bundles
@@ -22,7 +28,7 @@ vita: vita-assets
 	cmake -S port/vita -B $(VITA_BUILD) -DCMAKE_BUILD_TYPE=Release
 	cmake --build $(VITA_BUILD)
 
-vita-check: vita
+vita-check: runtime-test vita
 	port/vita/verify_elf.sh $(VITA_BUILD)/vitatanxga \
 		$(VITASDK)/arm-vita-eabi/lib/libvita2d.a \
 		$(VITASDK)/arm-vita-eabi/lib/libpng.a \

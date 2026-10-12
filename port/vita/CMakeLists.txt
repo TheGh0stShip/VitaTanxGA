@@ -20,11 +20,15 @@ set(VITA_TITLEID "VTGA00001")
 set(VITA_VERSION "00.01")
 
 add_executable(${PROJECT_NAME}
+  ../runtime/src/btga_runtime.c
   src/main.c
   src/vita_platform.c
 )
 
-target_include_directories(${PROJECT_NAME} PRIVATE include)
+target_include_directories(${PROJECT_NAME} PRIVATE
+  include
+  ../runtime/include
+)
 target_compile_features(${PROJECT_NAME} PRIVATE c_std_11)
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wpedantic)
 target_link_libraries(${PROJECT_NAME} PRIVATE

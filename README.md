@@ -11,7 +11,9 @@ the matching-decompilation project.
 The repository currently produces an installable PS Vita VPK that:
 
 - targets 32-bit ARMv7-A/Thumb with the VitaSDK hard-float ABI;
-- initializes Vita2D and controller input;
+- runs platform-neutral game state at a fixed 30 Hz simulation rate;
+- maps Vita buttons and both analog sticks into a portable input structure;
+- initializes Vita2D rendering;
 - loads and displays a decoded game image from `app0:assets`;
 - packages decoded worlds, images, scripts, and libmus audio resources; and
 - validates the executable and code-bearing libraries for ABI consistency.
@@ -52,7 +54,8 @@ make vita-check
    `assets/extracted/us/vita` directory;
 3. cross-compiles the Vita executable;
 4. packages the extracted resources into the VPK; and
-5. verifies ELF32 ARMv7-A and hard-float attributes.
+5. runs the host-side portable-runtime test; and
+6. verifies ELF32 ARMv7-A and hard-float attributes.
 
 The resulting package is:
 
