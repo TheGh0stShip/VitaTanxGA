@@ -1,5 +1,6 @@
 #include "vita_fast3d_bridge.hpp"
 #include "vita_fast3d_abi.hpp"
+#include "vita_recomp_diagnostics.hpp"
 
 #include <malloc.h>
 #include <string.h>
@@ -217,6 +218,7 @@ bool Fast3DMemoryBridge::StageTextureImage(u32 requiredBytes, bool palette, u32 
         mInterpreter->SyncColorImageToRdramIfReferenced(
             mRdram, mRdramSize, sourceAddress, requiredBytes)) {
         mSyncedColorImageFrame = mBuildSerial;
+        btga_vita_note_framebuffer_readback();
     }
 
     TextureStage* stage = nullptr;

@@ -12,6 +12,7 @@ std::atomic<std::uint32_t> display_list_count{0};
 std::atomic<std::uint32_t> rejected_display_list_count{0};
 std::atomic<std::uint32_t> present_count{0};
 std::atomic<std::uint32_t> audio_open_count{0};
+std::atomic<std::uint32_t> framebuffer_readback_count{0};
 
 void note_first(std::atomic<std::uint32_t>& counter, const char* message) {
     if (counter.fetch_add(1, std::memory_order_relaxed) == 0) btga_vita_log(message);
@@ -29,7 +30,14 @@ void btga_vita_log(const char* message) {
     }
 }
 
-void btga_vita_note_vi() { note_first(vi_count, "first VI event delivered"); }
+void btga_vita_note_vi() {
+    const std::uint32_t count =
+        vi_count.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (count == 1) btga_vita_log("first VI event delivered");
+    // Preserve progress evidence even if an emulator or hardware session is
+    // terminated externally and cannot execute the clean-shutdown summary.
+    if ((count % 300U) == 0U) btga_vita_log_runtime_summary();
+}
 
 void btga_vita_note_display_list(bool accepted) {
     if (accepted) note_first(display_list_count, "first display list accepted");
@@ -40,14 +48,20 @@ void btga_vita_note_present() { note_first(present_count, "first frame presented
 
 void btga_vita_note_audio_open() { note_first(audio_open_count, "48 kHz audio output opened"); }
 
+void btga_vita_note_framebuffer_readback() {
+    note_first(framebuffer_readback_count,
+               "framebuffer-backed texture synchronized to RDRAM");
+}
+
 void btga_vita_log_runtime_summary() {
     char summary[192];
     std::snprintf(summary, sizeof(summary),
-                  "runtime summary: VI=%u display_lists=%u rejected=%u presents=%u audio_opens=%u",
+                  "runtime summary: VI=%u display_lists=%u rejected=%u presents=%u audio_opens=%u framebuffer_readbacks=%u",
                   vi_count.load(std::memory_order_relaxed),
                   display_list_count.load(std::memory_order_relaxed),
                   rejected_display_list_count.load(std::memory_order_relaxed),
                   present_count.load(std::memory_order_relaxed),
-                  audio_open_count.load(std::memory_order_relaxed));
+                  audio_open_count.load(std::memory_order_relaxed),
+                  framebuffer_readback_count.load(std::memory_order_relaxed));
     btga_vita_log(summary);
 }
