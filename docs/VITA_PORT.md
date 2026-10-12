@@ -57,7 +57,9 @@ stages textures safely, and passes the resulting lists to a vitaGL rendering
 backend derived from the open-source Fast3D implementation used by
 DaedalusX64-vitaGL.
 
-Runtime-compiled vitaGL shaders are cached under the title's own
+The bootstrap pins and builds vitaGL with the Vita renderer's required
+single-threaded, splash-free configuration rather than linking the generic
+SDK archive. Runtime-compiled vitaGL shaders are cached under the title's own
 `ux0:data/VitaTanxGA/shader_cache` directory.
 
 `runtime.log` records durable first-event milestones for VI delivery, accepted

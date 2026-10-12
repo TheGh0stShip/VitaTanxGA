@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -9,14 +11,31 @@
 namespace {
 constexpr std::uint32_t kSectionRam = 0x80071000U;
 
+const auto& sorted_function_entries() {
+    static const auto entries = [] {
+        std::array<const FuncEntry*,
+                   ARRLEN(section_0_resident_first_mb_funcs)> result{};
+        for (std::size_t index = 0; index < result.size(); ++index) {
+            result[index] = &section_0_resident_first_mb_funcs[index];
+        }
+        std::sort(result.begin(), result.end(),
+                  [](const FuncEntry* left, const FuncEntry* right) {
+                      return left->offset < right->offset;
+                  });
+        return result;
+    }();
+    return entries;
+}
+
 recomp_func_t* find_exact(std::uint32_t offset) {
+    const auto& entries = sorted_function_entries();
     std::size_t first = 0;
-    std::size_t count = ARRLEN(section_0_resident_first_mb_funcs);
+    std::size_t count = entries.size();
     while (count != 0) {
         const std::size_t step = count / 2;
         const std::size_t index = first + step;
         const std::uint32_t candidate =
-            section_0_resident_first_mb_funcs[index].offset;
+            entries[index]->offset;
         if (candidate < offset) {
             first = index + 1;
             count -= step + 1;
@@ -24,9 +43,8 @@ recomp_func_t* find_exact(std::uint32_t offset) {
             count = step;
         }
     }
-    if (first < ARRLEN(section_0_resident_first_mb_funcs) &&
-        section_0_resident_first_mb_funcs[first].offset == offset) {
-        return section_0_resident_first_mb_funcs[first].func;
+    if (first < entries.size() && entries[first]->offset == offset) {
+        return entries[first]->func;
     }
     return nullptr;
 }

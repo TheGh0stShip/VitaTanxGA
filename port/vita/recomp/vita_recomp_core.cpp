@@ -65,6 +65,13 @@ extern "C" void do_break(std::uint32_t vram) {
 
 void run_thread_function(std::uint8_t* rdram, std::uint64_t address,
                          std::uint64_t stack, std::uint64_t argument) {
+    char message[128];
+    std::snprintf(message, sizeof(message),
+                  "starting translated thread pc=%08X sp=%08X arg=%08X",
+                  static_cast<std::uint32_t>(address),
+                  static_cast<std::uint32_t>(stack),
+                  static_cast<std::uint32_t>(argument));
+    btga_vita_log(message);
     recomp_context ctx{};
     ctx.r29 = stack;
     ctx.r4 = argument;

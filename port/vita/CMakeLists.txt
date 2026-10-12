@@ -102,8 +102,14 @@ if(BTGA_BUILD_RECOMP)
 
   if(BTGA_BUILD_RECOMP_RUNTIME)
     set(BTGA_N64_RUNTIME_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../.deps/N64ModernRuntime")
+    set(BTGA_VITAGL_LIBRARY
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../.deps/vitaGL/libvitaGL.a")
     set(BTGA_ULTRAMODERN "${BTGA_N64_RUNTIME_ROOT}/ultramodern")
     set(BTGA_LIBRECOMP "${BTGA_N64_RUNTIME_ROOT}/librecomp")
+    if(NOT EXISTS "${BTGA_VITAGL_LIBRARY}")
+      message(FATAL_ERROR
+        "Pinned Vita renderer is missing; run make vita-recomp-bootstrap")
+    endif()
     add_library(btga_vita_recomp_runtime STATIC
       ${BTGA_ULTRAMODERN}/src/audio.cpp
       ${BTGA_ULTRAMODERN}/src/error_handling.cpp
@@ -183,13 +189,14 @@ if(BTGA_BUILD_RECOMP)
         "${BTGA_ULTRAMODERN}/include"
         "${BTGA_N64_RUNTIME_ROOT}/thirdparty"
         "${BTGA_N64_RUNTIME_ROOT}/thirdparty/concurrentqueue"
+        "${CMAKE_CURRENT_SOURCE_DIR}/recomp"
       )
       target_link_libraries(vitatanxga_recomp PRIVATE
         -Wl,--start-group
         btga_vita_recomp_runtime
         btga_recompiled_game_armv7
         -Wl,--end-group
-        vitaGL
+        "${BTGA_VITAGL_LIBRARY}"
         vitashark
         SceShaccCgExt
         mathneon

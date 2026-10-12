@@ -33,7 +33,8 @@ targeted loader tests. It is not the main port and is built only with
 ## Requirements
 
 - A legally obtained USA Rev 0 BattleTanx: Global Assault ROM
-- [VitaSDK](https://vitasdk.org/) with vitaGL
+- [VitaSDK](https://vitasdk.org/); the bootstrap builds the pinned vitaGL
+  renderer configuration locally
 - CMake and Python 3
 
 The supported ROM is an 8 MiB big-endian `.z64` dump with SHA-1:

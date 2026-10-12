@@ -146,7 +146,7 @@ vita-recomp-app: vita-recomp-prepare
 		-DBTGA_BUILD_FULL_RECOMP_APP=ON
 	cmake --build $(VITA_BUILD)-full-recomp --target VitaTanxGA-recomp.vpk-vpk
 	port/vita/verify_elf.sh $(VITA_BUILD)-full-recomp/vitatanxga_recomp \
-		$(VITASDK)/arm-vita-eabi/lib/libvitaGL.a \
+		.deps/vitaGL/libvitaGL.a \
 		$(VITASDK)/arm-vita-eabi/lib/libvitashark.a \
 		$(VITASDK)/arm-vita-eabi/lib/libmathneon.a
 	@unzip -l $(VITA_BUILD)-full-recomp/VitaTanxGA-recomp.vpk | \

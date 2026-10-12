@@ -9,12 +9,12 @@
 #include <malloc.h>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include <psp2/audioout.h>
 #include <psp2/ctrl.h>
 #include <psp2/io/stat.h>
+#include <psp2/kernel/threadmgr.h>
 #include <vitaGL.h>
 
 #include "funcs.h"
@@ -54,7 +54,7 @@ std::atomic<bool> audio_running{false};
 std::int16_t audio_ring[kAudioRingFrames * 2]{};
 std::atomic<std::uint32_t> audio_read{0};
 std::atomic<std::uint32_t> audio_write{0};
-std::thread audio_thread;
+SceUID audio_thread = -1;
 
 std::uint32_t rotate_left(std::uint32_t value, unsigned amount) {
     return (value << amount) | (value >> (32U - amount));
@@ -220,7 +220,7 @@ ultramodern::input::connected_device_info_t connected_device(int controller) {
     return {Device::Controller, Pak::RumblePak};
 }
 
-void run_audio() {
+int run_audio(SceSize, void*) {
     alignas(64) std::int16_t block[kAudioFrames * 2]{};
     while (audio_running.load()) {
         std::uint32_t read = audio_read.load(std::memory_order_relaxed);
@@ -239,6 +239,7 @@ void run_audio() {
         if (audio_port >= 0) sceAudioOutOutput(audio_port, block);
         else ultramodern::sleep_milliseconds(2);
     }
+    return 0;
 }
 
 void set_audio_frequency(std::uint32_t frequency) {
@@ -300,7 +301,7 @@ RspUcodeFunc* get_rsp_microcode(const OSTask* task) {
     return task->t.type == M_AUDTASK ? n_aspMain : nullptr;
 }
 void on_vi() { btga_vita_note_vi(); }
-void on_gfx_init() {}
+void on_gfx_init() { btga_vita_log("graphics worker initialized"); }
 void show_error(const char* message) { btga_vita_log(message); }
 std::string thread_name(const OSThread* thread) {
     return "BTGA-" + std::to_string(thread->id);
@@ -338,11 +339,17 @@ int main() {
 
     sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG_WIDE);
     sceCtrlSetSamplingModeExt(SCE_CTRL_MODE_ANALOG_WIDE);
-    if (!vglInitExtended(0, 960, 544, 0x1800000,
-                         SCE_GXM_MULTISAMPLE_NONE)) {
-        btga_vita_log("vitaGL initialization failed");
-        return 4;
-    }
+    // Fast3D creates linked vertex/fragment programs and expects vitaGL to
+    // resolve attribute semantics from the shader pair.  This must be chosen
+    // before initialization; the default postponed mode is not compatible
+    // with the Daedalus-style backend used below.
+    vglSetSemanticBindingMode(VGL_MODE_SHADER_PAIR);
+    vglSetShaderCachePath("ux0:data/VitaTanxGA/shader_cache");
+    // vitaGL returns whether it had to clamp the requested resolution, not an
+    // initialization-success flag.  GL_FALSE is the expected result for the
+    // Vita's native 960x544 mode.
+    vglInitExtended(0, 960, 544, 0x1800000, SCE_GXM_MULTISAMPLE_NONE);
+    btga_vita_log("vitaGL initialized");
     const recomp::rsp::callbacks_t rsp_select{get_rsp_microcode};
     recomp::rsp::set_callbacks(rsp_select);
     const ultramodern::rsp::callbacks_t rsp{
@@ -358,13 +365,26 @@ int main() {
     const ultramodern::threads::callbacks_t threads{thread_name};
     ultramodern::set_callbacks(rsp, renderer, audio, input, gfx, events,
                                errors, threads);
+    btga_vita_log("runtime callbacks installed");
 
     audio_running.store(true);
-    audio_thread = std::thread(run_audio);
+    audio_thread = sceKernelCreateThread("VitaTanxGA audio", run_audio,
+                                         0x10000100, 0x10000, 0, 0, nullptr);
+    if (audio_thread < 0 || sceKernelStartThread(audio_thread, 0, nullptr) < 0) {
+        if (audio_thread >= 0) sceKernelDeleteThread(audio_thread);
+        audio_thread = -1;
+        audio_running.store(false);
+        btga_vita_log("audio worker could not be started");
+        return 5;
+    }
+    btga_vita_log("audio worker started");
     ultramodern::preinit(rdram.get(), nullptr);
+    btga_vita_log("runtime scheduler initialized");
     ultramodern::init_saving(rdram.get());
+    btga_vita_log("controller pak service initialized");
     recomp_context context{};
     context.f_odd = &context.f0.u32h;
+    btga_vita_log("entering translated cartridge code");
     recomp_entrypoint(rdram.get(), &context);
     btga_vita_log("translated cartridge entrypoint returned to Vita host loop");
     while (!exited.load()) ultramodern::sleep_milliseconds(10);
@@ -374,7 +394,12 @@ int main() {
     ultramodern::join_thread_cleaner_thread();
     ultramodern::join_saving_thread();
     audio_running.store(false);
-    if (audio_thread.joinable()) audio_thread.join();
+    if (audio_thread >= 0) {
+        int status = 0;
+        sceKernelWaitThreadEnd(audio_thread, &status, nullptr);
+        sceKernelDeleteThread(audio_thread);
+        audio_thread = -1;
+    }
     for (int controller = 0; controller < kControllerCount; ++controller) {
         set_rumble(controller, false);
     }

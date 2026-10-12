@@ -1,27 +1,5 @@
-diff --git a/thirdparty/concurrentqueue/lightweightsemaphore.h b/thirdparty/concurrentqueue/lightweightsemaphore.h
-index 41ba094..e79968e 100644
---- a/thirdparty/concurrentqueue/lightweightsemaphore.h
-+++ b/thirdparty/concurrentqueue/lightweightsemaphore.h
-@@ -24,7 +24,7 @@ extern "C" {
- }
- #elif defined(__MACH__)
- #include <mach/mach.h>
--#elif defined(__unix__)
-+#elif defined(__unix__) || defined(__vita__)
- #include <semaphore.h>
- 
- #if defined(__GLIBC_PREREQ) && defined(_GNU_SOURCE)
-@@ -165,7 +165,7 @@ public:
- 		}
- 	}
- };
--#elif defined(__unix__)
-+#elif defined(__unix__) || defined(__vita__)
- //---------------------------------------------------------
- // Semaphore (POSIX, Linux)
- //---------------------------------------------------------
 diff --git a/librecomp/include/librecomp/addresses.hpp b/librecomp/include/librecomp/addresses.hpp
-index 9eea42f..950a5de 100644
+index b1b50cb..cf904a9 100644
 --- a/librecomp/include/librecomp/addresses.hpp
 +++ b/librecomp/include/librecomp/addresses.hpp
 @@ -6,10 +6,18 @@
@@ -43,6 +21,130 @@ index 9eea42f..950a5de 100644
      // We need a place in rdram to hold the PI handles, so pick an address in extended rdram
      constexpr int32_t cart_handle = 0x80800000;
      constexpr int32_t drive_handle = (int32_t)(cart_handle + sizeof(OSPiHandle));
+diff --git a/librecomp/src/pi.cpp b/librecomp/src/pi.cpp
+index 43509ba..c7426c6 100644
+--- a/librecomp/src/pi.cpp
++++ b/librecomp/src/pi.cpp
+@@ -86,7 +86,7 @@ void recomp::do_rom_pio(uint8_t* rdram, gpr ram_address, uint32_t physical_addr)
+ 
+ struct {
+     std::vector<char> save_buffer;
+-    std::thread saving_thread;
++    btga::VitaThread saving_thread;
+     std::filesystem::path save_file_path;
+     moodycamel::LightweightSemaphore write_sempahore;
+     // Used to tell the saving thread that a file swap is pending.
+@@ -247,7 +247,7 @@ void ultramodern::init_saving(RDRAM_ARG1) {
+ 
+     read_save_file();
+ 
+-    save_context.saving_thread = std::thread{saving_thread_func, PASS_RDRAM};
++    save_context.saving_thread = btga::VitaThread{saving_thread_func, PASS_RDRAM};
+ }
+ 
+ void ultramodern::change_save_file(const std::u8string& subfolder, const std::u8string& name) {
+diff --git a/thirdparty/concurrentqueue/concurrentqueue.h b/thirdparty/concurrentqueue/concurrentqueue.h
+index bcb06a1..44022b7 100644
+--- a/thirdparty/concurrentqueue/concurrentqueue.h
++++ b/thirdparty/concurrentqueue/concurrentqueue.h
+@@ -79,6 +79,10 @@
+ #include <thread>		// partly for __WINPTHREADS_VERSION if on MinGW-w64 w/ POSIX threading
+ #include <mutex>        // used for thread exit synchronization
+ 
++#if defined(__vita__)
++#include <psp2/kernel/threadmgr.h>
++#endif
++
+ // Platform-specific definitions of a numeric thread ID type and an invalid value
+ namespace moodycamel { namespace details {
+ 	template<typename thread_id_t> struct thread_id_converter {
+@@ -105,6 +109,15 @@ namespace moodycamel { namespace details {
+ 	static const thread_id_t invalid_thread_id2 = 0xFFFFFFFFU;	// Not technically guaranteed to be invalid, but is never used in practice. Note that all Win32 thread IDs are presently multiples of 4.
+ 	static inline thread_id_t thread_id() { return static_cast<thread_id_t>(::GetCurrentThreadId()); }
+ } }
++#elif defined(__vita__)
++namespace moodycamel { namespace details {
++	typedef std::uint32_t thread_id_t;
++	static const thread_id_t invalid_thread_id = 0xFFFFFFFFU;
++	static const thread_id_t invalid_thread_id2 = 0xFFFFFFFEU;
++	static inline thread_id_t thread_id() {
++		return static_cast<thread_id_t>(sceKernelGetThreadId());
++	}
++} }
+ #elif defined(__arm__) || defined(_M_ARM) || defined(__aarch64__) || (defined(__APPLE__) && TARGET_OS_IPHONE) || defined(MOODYCAMEL_NO_THREAD_LOCAL)
+ namespace moodycamel { namespace details {
+ 	static_assert(sizeof(std::thread::id) == 4 || sizeof(std::thread::id) == 8, "std::thread::id is expected to be either 4 or 8 bytes");
+diff --git a/thirdparty/concurrentqueue/lightweightsemaphore.h b/thirdparty/concurrentqueue/lightweightsemaphore.h
+index 41ba094..0c98ced 100644
+--- a/thirdparty/concurrentqueue/lightweightsemaphore.h
++++ b/thirdparty/concurrentqueue/lightweightsemaphore.h
+@@ -24,6 +24,8 @@ extern "C" {
+ }
+ #elif defined(__MACH__)
+ #include <mach/mach.h>
++#elif defined(__vita__)
++#include <psp2/kernel/threadmgr.h>
+ #elif defined(__unix__)
+ #include <semaphore.h>
+ 
+@@ -165,6 +167,57 @@ public:
+ 		}
+ 	}
+ };
++#elif defined(__vita__)
++//---------------------------------------------------------
++// Semaphore (PS Vita native kernel primitive)
++//---------------------------------------------------------
++class Semaphore
++{
++private:
++	SceUID m_sema;
++
++	Semaphore(const Semaphore& other) MOODYCAMEL_DELETE_FUNCTION;
++	Semaphore& operator=(const Semaphore& other) MOODYCAMEL_DELETE_FUNCTION;
++
++public:
++	Semaphore(int initialCount = 0)
++	{
++		assert(initialCount >= 0);
++		m_sema = sceKernelCreateSema("N64ModernRuntime", 0,
++			static_cast<SceInt32>(initialCount), 0x7fffffff, nullptr);
++		assert(m_sema >= 0);
++	}
++
++	~Semaphore()
++	{
++		if (m_sema >= 0) sceKernelDeleteSema(m_sema);
++	}
++
++	bool wait()
++	{
++		return sceKernelWaitSema(m_sema, 1, nullptr) >= 0;
++	}
++
++	bool try_wait()
++	{
++		return sceKernelPollSema(m_sema, 1) >= 0;
++	}
++
++	bool timed_wait(std::uint64_t usecs)
++	{
++		SceUInt timeout = usecs > 0xffffffffULL ? 0xffffffffU
++			: static_cast<SceUInt>(usecs);
++		return sceKernelWaitSema(m_sema, 1, &timeout) >= 0;
++	}
++
++	void signal(int count = 1)
++	{
++		assert(count >= 0);
++		const int result = sceKernelSignalSema(m_sema, count);
++		assert(result >= 0);
++		(void)result;
++	}
++};
+ #elif defined(__unix__)
+ //---------------------------------------------------------
+ // Semaphore (POSIX, Linux)
 diff --git a/ultramodern/include/ultramodern/renderer_context.hpp b/ultramodern/include/ultramodern/renderer_context.hpp
 index d60c4ec..2f54dc5 100644
 --- a/ultramodern/include/ultramodern/renderer_context.hpp
@@ -56,11 +158,33 @@ index d60c4ec..2f54dc5 100644
  #elif defined(__APPLE__)
          struct WindowHandle {
              void* window;
+diff --git a/ultramodern/include/ultramodern/ultramodern.hpp b/ultramodern/include/ultramodern/ultramodern.hpp
+index 46aea61..ce6d5a4 100644
+--- a/ultramodern/include/ultramodern/ultramodern.hpp
++++ b/ultramodern/include/ultramodern/ultramodern.hpp
+@@ -8,6 +8,8 @@
+ #include <chrono>
+ #include <filesystem>
+ 
++#include "vita_thread.hpp"
++
+ #undef MOODYCAMEL_DELETE_FUNCTION
+ #define MOODYCAMEL_DELETE_FUNCTION = delete
+ #include "lightweightsemaphore.h"
+@@ -22,7 +24,7 @@
+ #include "ultramodern/threads.hpp"
+ 
+ struct UltraThreadContext {
+-    std::thread host_thread;
++    btga::VitaThread host_thread;
+     moodycamel::LightweightSemaphore running;
+     moodycamel::LightweightSemaphore initialized;
+ };
 diff --git a/ultramodern/src/error_handling.cpp b/ultramodern/src/error_handling.cpp
-index 5df0a36..03b138b 100644
+index 8ca779e..1e250b8 100644
 --- a/ultramodern/src/error_handling.cpp
 +++ b/ultramodern/src/error_handling.cpp
-@@ -21,7 +21,7 @@ void ultramodern::error_handling::quick_exit(const char* filename, int line, con
+@@ -21,7 +21,7 @@ void ultramodern::error_handling::message_box(const char* msg) {
  void ultramodern::error_handling::quick_exit(const char* filename, int line, const char *func, int exit_status) {
      fprintf(stderr, "Exiting with exit status '%i'. Function %s, at file %s:%i\n", exit_status, func, filename, line);
  
@@ -69,11 +193,147 @@ index 5df0a36..03b138b 100644
      std::_Exit(exit_status);
  #else
      std::quick_exit(exit_status);
+diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
+index 17d7a47..0f04e73 100644
+--- a/ultramodern/src/events.cpp
++++ b/ultramodern/src/events.cpp
+@@ -56,7 +56,7 @@ struct ViState {
+ 
+ static struct {
+     struct {
+-        std::thread thread;
++        btga::VitaThread thread;
+         int cur_state;
+         int field;
+         ViState states[2];
+@@ -117,8 +117,8 @@ static struct {
+         }
+     } vi;
+     struct {
+-        std::thread gfx_thread;
+-        std::thread task_thread;
++        btga::VitaThread gfx_thread;
++        btga::VitaThread task_thread;
+         PTR(OSMesgQueue) mq = NULLPTR;
+         OSMesg msg = (OSMesg)0;
+     } sp;
+@@ -583,8 +583,8 @@ void ultramodern::init_events(RDRAM_ARG ultramodern::renderer::WindowHandle wind
+     moodycamel::LightweightSemaphore gfx_thread_ready;
+     moodycamel::LightweightSemaphore task_thread_ready;
+     events_context.rdram = rdram;
+-    events_context.sp.gfx_thread = std::thread{ gfx_thread_func, rdram, &gfx_thread_ready, window_handle };
+-    events_context.sp.task_thread = std::thread{ task_thread_func, rdram, &task_thread_ready };
++    events_context.sp.gfx_thread = btga::VitaThread{ gfx_thread_func, rdram, &gfx_thread_ready, window_handle };
++    events_context.sp.task_thread = btga::VitaThread{ task_thread_func, rdram, &task_thread_ready };
+ 
+     // Wait for the two sp threads to be ready before continuing to prevent the game from
+     // running before we're able to handle RSP tasks.
+@@ -619,7 +619,7 @@ void ultramodern::init_events(RDRAM_ARG ultramodern::renderer::WindowHandle wind
+         throw std::runtime_error("Failed to initialize the renderer");
+     }
+ 
+-    events_context.vi.thread = std::thread{ vi_thread_func };
++    events_context.vi.thread = btga::VitaThread{ vi_thread_func };
+ }
+ 
+ void ultramodern::join_event_threads() {
 diff --git a/ultramodern/src/threads.cpp b/ultramodern/src/threads.cpp
-index 6e3ed18..0634307 100644
+index 6e3ed18..cfd6a74 100644
 --- a/ultramodern/src/threads.cpp
 +++ b/ultramodern/src/threads.cpp
-@@ -137,6 +137,9 @@ void ultramodern::set_native_thread_priority(ThreadPriority pri) {
+@@ -9,6 +9,19 @@
+ 
+ #include "ultramodern/threads.hpp"
+ 
++#if defined(__vita__)
++extern void btga_vita_log(const char* message);
++
++static void log_vita_thread(const char* action, OSId id,
++                            PTR(thread_func_t) entrypoint) {
++    char message[128];
++    std::snprintf(message, sizeof(message),
++                  "%s game thread id=%d entry=%08X", action, id,
++                  static_cast<unsigned>(entrypoint));
++    btga_vita_log(message);
++}
++#endif
++
+ // Native APIs only used to set thread names for easier debugging
+ #ifdef _WIN32
+ #include <Windows.h>
+@@ -29,22 +42,66 @@ std::string ultramodern::threads::get_game_thread_name(const OSThread* t) {
+ 
+ extern "C" void bootproc();
+ 
++#if defined(__vita__)
++// Vita kernel threads created directly with sceKernelCreateThread do not pass
++// through libstdc++'s std::thread startup and cannot safely use C++
++// thread_local storage. Keep the small scheduler state keyed by kernel UID.
++struct VitaSchedulerThreadState {
++    SceUID uid = -1;
++    bool entrypoint = false;
++    bool game = false;
++    PTR(OSThread) self = NULLPTR;
++};
++
++static VitaSchedulerThreadState vita_thread_states[32]{};
++static std::atomic_flag vita_thread_states_lock = ATOMIC_FLAG_INIT;
++
++static VitaSchedulerThreadState& scheduler_thread_state() {
++    const SceUID uid = sceKernelGetThreadId();
++    while (vita_thread_states_lock.test_and_set(std::memory_order_acquire)) {
++        sceKernelDelayThread(100);
++    }
++    VitaSchedulerThreadState* empty = nullptr;
++    VitaSchedulerThreadState* found = nullptr;
++    for (auto& state : vita_thread_states) {
++        if (state.uid == uid) {
++            found = &state;
++            break;
++        }
++        if (empty == nullptr && state.uid < 0) empty = &state;
++    }
++    if (found == nullptr && empty != nullptr) {
++        empty->uid = uid;
++        found = empty;
++    }
++    vita_thread_states_lock.clear(std::memory_order_release);
++    if (found == nullptr) std::abort();
++    return *found;
++}
++
++static bool& local_entrypoint_thread() { return scheduler_thread_state().entrypoint; }
++static bool& local_game_thread() { return scheduler_thread_state().game; }
++static PTR(OSThread)& local_thread_self() { return scheduler_thread_state().self; }
++#else
+ thread_local bool is_entrypoint_thread = false;
+-// Whether this thread is part of the game (i.e. the start thread or one spawned by osCreateThread)
+ thread_local bool is_game_thread = false;
+ thread_local PTR(OSThread) thread_self = NULLPTR;
++static bool& local_entrypoint_thread() { return is_entrypoint_thread; }
++static bool& local_game_thread() { return is_game_thread; }
++static PTR(OSThread)& local_thread_self() { return thread_self; }
++#endif
+ 
+ void ultramodern::set_entrypoint_thread() {
+-    ::is_game_thread = true;
+-    ::is_entrypoint_thread = true;
++    local_game_thread() = true;
++    local_entrypoint_thread() = true;
+ }
+ 
+ bool ultramodern::is_entrypoint_thread() {
+-    return ::is_entrypoint_thread;
++    return local_entrypoint_thread();
+ }
+ 
+ bool ultramodern::is_game_thread() {
+-    return ::is_game_thread;
++    return local_game_thread();
+ }
+ 
+ #if 0
+@@ -137,6 +194,9 @@ void ultramodern::set_native_thread_priority(ThreadPriority pri) {
      //         break;
      // }
  }
@@ -83,3 +343,237 @@ index 6e3ed18..0634307 100644
  #elif defined(__APPLE__)
  void ultramodern::set_native_thread_name(const std::string& name) {
      if (name.length() > 15) {
+@@ -175,22 +235,25 @@ void run_next_thread(RDRAM_ARG1) {
+ }
+ 
+ void ultramodern::run_next_thread_and_wait(RDRAM_ARG1) {
+-    UltraThreadContext* cur_context = TO_PTR(OSThread, thread_self)->context;
++    UltraThreadContext* cur_context = TO_PTR(OSThread, local_thread_self())->context;
+     run_next_thread(PASS_RDRAM1);
+     wait_for_resumed(PASS_RDRAM cur_context);
+ }
+ 
+ void ultramodern::resume_thread_and_wait(RDRAM_ARG OSThread *t) {
+-    UltraThreadContext* cur_context = TO_PTR(OSThread, thread_self)->context;
++    UltraThreadContext* cur_context = TO_PTR(OSThread, local_thread_self())->context;
+     resume_thread(t);
+     wait_for_resumed(PASS_RDRAM cur_context);
+ }
+ 
+ static void _thread_func(RDRAM_ARG PTR(OSThread) self_, PTR(thread_func_t) entrypoint, PTR(void) arg, UltraThreadContext* thread_context) {
+     OSThread *self = TO_PTR(OSThread, self_);
++#if defined(__vita__)
++    log_vita_thread("initialized", self->id, entrypoint);
++#endif
+     debug_printf("[Thread] Thread created: %d\n", self->id);
+-    thread_self = self_;
+-    is_game_thread = true;
++    local_thread_self() = self_;
++    local_game_thread() = true;
+ 
+     // Set the thread name
+     ultramodern::set_native_thread_name(ultramodern::threads::get_game_thread_name(self));
+@@ -209,6 +272,9 @@ static void _thread_func(RDRAM_ARG PTR(OSThread) self_, PTR(thread_func_t) entry
+ 
+     // Make sure the thread wasn't replaced or destroyed before it was started.
+     if (self->context == thread_context) {
++#if defined(__vita__)
++        log_vita_thread("running", self->id, entrypoint);
++#endif
+         debug_printf("[Thread] Thread started: %d\n", self->id);
+         try {
+             // Run the thread's function with the provided argument.
+@@ -233,10 +299,13 @@ static void _thread_func(RDRAM_ARG PTR(OSThread) self_, PTR(thread_func_t) entry
+ 
+ extern "C" void osStartThread(RDRAM_ARG PTR(OSThread) t_) {
+     OSThread* t = TO_PTR(OSThread, t_);
++#if defined(__vita__)
++    log_vita_thread("starting", t->id, 0);
++#endif
+     debug_printf("[os] Start Thread %d\n", t->id);
+ 
+     // If this is a game thread, insert the new thread into the running queue and then check the running queue.
+-    if (thread_self) {
++    if (local_thread_self()) {
+         ultramodern::schedule_running_thread(PASS_RDRAM t_);
+         ultramodern::check_running_queue(PASS_RDRAM1);
+     }
+@@ -249,6 +318,9 @@ extern "C" void osStartThread(RDRAM_ARG PTR(OSThread) t_) {
+ }
+ 
+ extern "C" void osCreateThread(RDRAM_ARG PTR(OSThread) t_, OSId id, PTR(thread_func_t) entrypoint, PTR(void) arg, PTR(void) sp, OSPri pri) {
++#if defined(__vita__)
++    log_vita_thread("creating", id, entrypoint);
++#endif
+     debug_printf("[os] Create Thread %d\n", id);
+     OSThread *t = TO_PTR(OSThread, t_);
+     
+@@ -263,7 +335,7 @@ extern "C" void osCreateThread(RDRAM_ARG PTR(OSThread) t_, OSId id, PTR(thread_f
+     // Pass the context as an argument to the thread function to ensure that it can't get cleared before the thread captures its value.
+     UltraThreadContext* context = new UltraThreadContext{};
+     t->context = context;
+-    context->host_thread = std::thread{_thread_func, PASS_RDRAM t_, entrypoint, arg, t->context};
++    context->host_thread = btga::VitaThread{_thread_func, PASS_RDRAM t_, entrypoint, arg, t->context};
+ 
+     // Wait until the thread is initialized to indicate that it's ready to be started.
+     context->initialized.wait();
+@@ -272,10 +344,10 @@ extern "C" void osCreateThread(RDRAM_ARG PTR(OSThread) t_, OSId id, PTR(thread_f
+ 
+ extern "C" void osStopThread(RDRAM_ARG PTR(OSThread) t_) {
+     if (t_ == NULLPTR) {
+-        t_ = thread_self;
++        t_ = local_thread_self();
+     }
+     // Check if the thread is stopping itself (arg is null or thread_self).
+-    if (t_ == thread_self) {
++    if (t_ == local_thread_self()) {
+         ultramodern::run_next_thread_and_wait(PASS_RDRAM1);
+     }
+     else {
+@@ -285,11 +357,11 @@ extern "C" void osStopThread(RDRAM_ARG PTR(OSThread) t_) {
+ 
+ extern "C" void osDestroyThread(RDRAM_ARG PTR(OSThread) t_) {
+     if (t_ == NULLPTR) {
+-        t_ = thread_self;
++        t_ = local_thread_self();
+     }
+     OSThread* t = TO_PTR(OSThread, t_);
+     // Check if the thread is destroying itself (arg is null or thread_self)
+-    if (t_ == thread_self) {
++    if (t_ == local_thread_self()) {
+         throw ultramodern::thread_terminated{};
+     }
+     // Otherwise if the thread isn't stopped, remove it from its currrent queue., 
+@@ -307,7 +379,7 @@ extern "C" void osDestroyThread(RDRAM_ARG PTR(OSThread) t_) {
+ 
+ extern "C" void osSetThreadPri(RDRAM_ARG PTR(OSThread) t_, OSPri pri) {
+     if (t_ == NULLPTR) {
+-        t_ = thread_self;
++        t_ = local_thread_self();
+     }
+     OSThread* t = TO_PTR(OSThread, t_);
+ 
+@@ -325,23 +397,23 @@ extern "C" void osSetThreadPri(RDRAM_ARG PTR(OSThread) t_, OSPri pri) {
+ 
+ extern "C" OSPri osGetThreadPri(RDRAM_ARG PTR(OSThread) t) {
+     if (t == NULLPTR) {
+-        t = thread_self;
++        t = local_thread_self();
+     }
+     return TO_PTR(OSThread, t)->priority;
+ }
+ 
+ extern "C" OSId osGetThreadId(RDRAM_ARG PTR(OSThread) t) {
+     if (t == NULLPTR) {
+-        t = thread_self;
++        t = local_thread_self();
+     }
+     return TO_PTR(OSThread, t)->id;
+ }
+ 
+ PTR(OSThread) ultramodern::this_thread() {
+-    return thread_self;
++    return local_thread_self();
+ }
+ 
+-static std::thread thread_cleaner_thread;
++static btga::VitaThread thread_cleaner_thread;
+ static moodycamel::BlockingConcurrentQueue<UltraThreadContext*> deleted_threads{};
+ extern std::atomic_bool exited;
+ 
+@@ -359,7 +431,7 @@ void thread_cleaner_func() {
+ }
+ 
+ void ultramodern::init_thread_cleanup() {
+-    thread_cleaner_thread = std::thread{thread_cleaner_func};
++    thread_cleaner_thread = btga::VitaThread{thread_cleaner_func};
+ }
+ 
+ void ultramodern::cleanup_thread(UltraThreadContext *cur_context) {
+diff --git a/ultramodern/src/timer.cpp b/ultramodern/src/timer.cpp
+index ee26c45..b25795b 100644
+--- a/ultramodern/src/timer.cpp
++++ b/ultramodern/src/timer.cpp
+@@ -40,7 +40,7 @@ struct RemoveTimerAction {
+ using Action = std::variant<AddTimerAction, RemoveTimerAction>;
+ 
+ struct {
+-    std::thread thread;
++    btga::VitaThread thread;
+     moodycamel::BlockingConcurrentQueue<Action> action_queue{};
+ } timer_context;
+ 
+@@ -141,7 +141,7 @@ void timer_thread(RDRAM_ARG1) {
+ }
+ 
+ void ultramodern::init_timers(RDRAM_ARG1) {
+-    timer_context.thread = std::thread{ timer_thread, PASS_RDRAM1 };
++    timer_context.thread = btga::VitaThread{ timer_thread, PASS_RDRAM1 };
+     timer_context.thread.detach();
+ }
+ 
+@@ -204,7 +204,26 @@ extern "C" int osStopTimer(RDRAM_ARG PTR(OSTimer) t_) {
+     return 0;
+ }
+ 
+-#ifdef _WIN32
++#if defined(__vita__)
++
++void ultramodern::sleep_milliseconds(uint32_t millis) {
++    sceKernelDelayThread(static_cast<SceUInt>(millis) * 1000U);
++}
++
++void ultramodern::sleep_until(const std::chrono::high_resolution_clock::time_point& time_point) {
++    const auto now = std::chrono::high_resolution_clock::now();
++    if (time_point <= now) return;
++    auto remaining = std::chrono::duration_cast<std::chrono::microseconds>(
++        time_point - now).count();
++    while (remaining > 0) {
++        const SceUInt delay = remaining > 0xffffffffLL
++            ? 0xffffffffU : static_cast<SceUInt>(remaining);
++        sceKernelDelayThread(delay);
++        remaining -= delay;
++    }
++}
++
++#elif defined(_WIN32)
+ 
+ // The implementations of std::chrono::sleep_until and sleep_for were affected by changing the system clock backwards in older versions
+ // of Microsoft's STL. This was fixed as of Visual Studio 2022 17.9, but to be safe ultramodern uses Win32 Sleep directly.
+diff --git a/ultramodern/src/ultrainit.cpp b/ultramodern/src/ultrainit.cpp
+index af5132c..1da24c9 100644
+--- a/ultramodern/src/ultrainit.cpp
++++ b/ultramodern/src/ultrainit.cpp
+@@ -1,6 +1,10 @@
+ #include "ultramodern/ultra64.h"
+ #include "ultramodern/ultramodern.hpp"
+ 
++#if defined(__vita__)
++extern void btga_vita_log(const char* message);
++#endif
++
+ void ultramodern::set_callbacks(
+     const rsp::callbacks_t& rsp_callbacks,
+     const renderer::callbacks_t& renderer_callbacks,
+@@ -24,9 +28,21 @@ void ultramodern::set_callbacks(
+ void ultramodern::preinit(RDRAM_ARG ultramodern::renderer::WindowHandle window_handle) {
+     ultramodern::set_entrypoint_thread();
+     ultramodern::init_events(PASS_RDRAM window_handle);
++#if defined(__vita__)
++    btga_vita_log("event workers initialized");
++#endif
+     ultramodern::init_timers(PASS_RDRAM1);
++#if defined(__vita__)
++    btga_vita_log("timer worker initialized");
++#endif
+     ultramodern::init_audio();
++#if defined(__vita__)
++    btga_vita_log("audio callbacks initialized");
++#endif
+     ultramodern::init_thread_cleanup();
++#if defined(__vita__)
++    btga_vita_log("thread cleanup worker initialized");
++#endif
+ }
+ 
+ extern "C" void osInitialize() {

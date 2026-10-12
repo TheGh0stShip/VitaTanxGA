@@ -68,15 +68,21 @@ public:
     explicit VitaRenderer(std::uint8_t* rdram)
         : rdram_(rdram), bridge_(rdram, btga::vita::kRdramSize32),
           interpreter_(std::make_shared<Fast::Interpreter>()) {
+        btga_vita_log("renderer object allocated");
         Fast::GfxSetInstance(interpreter_);
+        btga_vita_log("Fast3D instance installed");
         interpreter_->Init(&window_, &api_, "VitaTanx GA", true,
                            960, 544, 0, 0);
+        btga_vita_log("Fast3D backend initialized");
         interpreter_->SetRdramMemory(rdram_, btga::vita::kRdramSize32);
+        btga_vita_log("Fast3D RDRAM bound");
         interpreter_->SetNativeDimensions(320.0F, 240.0F);
         interpreter_->SetDisplayConfiguration(960, 544, 0, 0,
                                               (4.0F / 3.0F) / (960.0F / 544.0F));
+        btga_vita_log("Fast3D display configured");
         bridge_.SetInterpreter(interpreter_.get());
         Fast::gfx_set_target_ucode(ucode_f3dex2);
+        btga_vita_log("renderer ready");
     }
     ~VitaRenderer() override = default;
     bool valid() override { return interpreter_ != nullptr; }
