@@ -58,9 +58,17 @@ The repository currently produces an installable PS Vita VPK that:
   narrative with original 30 Hz waits on the portable runtime boundary;
 - validates the executable and code-bearing libraries for ABI consistency.
 
-This is an **in-progress runtime port**, not yet the complete game. Execution
-of world-object/camera mission commands, remaining object behavior, remaining
-sound effects and music, and additional frontend services are still being
+The complete-game path also reproducibly translates the same 1,879-function
+retail catalogue used by the playable PC port. All 35 generated C units compile
+as a 1.7 MiB static library with VitaSDK's ARMv7-A hard-float compiler.
+Generated translation sources and ROM-derived binary data remain local and
+ignored. An ARM fallback implements the R4300's signed and unsigned 64x64-bit
+multiply results without assuming AArch64 or compiler `__int128` support.
+
+This is an **in-progress runtime port**, not yet the complete game. The full
+translated game still needs Vita-native N64 scheduling and display-list
+services before it can replace the current portable gameplay executable.
+Remaining sound effects, music, and frontend services are also still being
 ported from the recovered implementation.
 
 ## Windows Vita3K captures

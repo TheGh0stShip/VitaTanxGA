@@ -14,6 +14,8 @@ endif()
 project(vitatanxga C)
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 
+option(BTGA_BUILD_RECOMP "ARM compile-check locally generated full-game translation" OFF)
+
 set(VITA_APP_NAME "VitaTanx GA")
 # Reserved for this homebrew port; change only before distributing a build.
 set(VITA_TITLEID "VTGA00001")
@@ -65,6 +67,34 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
   z
   m
 )
+
+if(BTGA_BUILD_RECOMP)
+  set(BTGA_RECOMP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../recomp")
+  set(BTGA_RECOMP_DIR "${BTGA_RECOMP_ROOT}/generated/functions")
+  set(BTGA_RECOMP_INCLUDE
+      "${CMAKE_CURRENT_SOURCE_DIR}/../../.deps/N64ModernRuntime/N64Recomp/include")
+  if(NOT EXISTS "${BTGA_RECOMP_DIR}/funcs.h")
+    message(FATAL_ERROR "Run port/recomp/prepare.sh before BTGA_BUILD_RECOMP")
+  endif()
+  if(NOT EXISTS "${BTGA_RECOMP_INCLUDE}/recomp.h")
+    message(FATAL_ERROR "Run port/recomp/bootstrap.sh before BTGA_BUILD_RECOMP")
+  endif()
+  file(GLOB BTGA_RECOMP_C CONFIGURE_DEPENDS "${BTGA_RECOMP_DIR}/funcs_*.c")
+  list(LENGTH BTGA_RECOMP_C BTGA_RECOMP_UNIT_COUNT)
+  if(NOT BTGA_RECOMP_UNIT_COUNT EQUAL 35)
+    message(FATAL_ERROR "Expected 35 full-game translation units, found ${BTGA_RECOMP_UNIT_COUNT}")
+  endif()
+  add_library(btga_recompiled_game_armv7 STATIC ${BTGA_RECOMP_C})
+  target_include_directories(btga_recompiled_game_armv7 PRIVATE
+    "${BTGA_RECOMP_DIR}"
+    "${BTGA_RECOMP_ROOT}/generated/include"
+    "${BTGA_RECOMP_INCLUDE}"
+  )
+  target_compile_options(btga_recompiled_game_armv7 PRIVATE
+    -fno-strict-aliasing -Wno-unused-variable
+    "-include${BTGA_RECOMP_ROOT}/runtime_compat.h"
+  )
+endif()
 
 vita_create_self(${PROJECT_NAME}.self ${PROJECT_NAME})
 

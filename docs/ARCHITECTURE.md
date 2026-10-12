@@ -10,6 +10,19 @@ The project has three deliberately separate execution environments:
 
 The original ROM remains the behavioral and binary-match reference. Host-facing code must not reinterpret N64 structs through native C layouts. Decode serialized fields with explicit widths and byte order, assert layouts that genuinely cross boundaries, and represent emulated 32-bit addresses as integer tokens rather than truncated host pointers.
 
+## Complete-game translation boundary
+
+`port/recomp` uses the pinned official N64Recomp tool and the same verified
+1,879-function catalogue as the playable PC port. Generated C, translated ROM
+data, and audio-microcode output are local build products under ignored paths.
+`make vita-recomp-check` compiles all 35 generated units with VitaSDK and checks
+every object for ELF32, ARMv7, and VFP-register ABI attributes.
+
+ARMv7 has no native 128-bit integer type. The generated Vita ABI header uses a
+tested pair-of-`uint64_t` implementation for the R4300 `DMULT` and `DMULTU`
+high/low results. This preserves 64-bit guest register behavior without
+mistaking the Cortex-A9 for AArch64 or changing the Vita ILP32 ABI.
+
 ## Platform-neutral source boundary
 
 Recovered game logic, formats, state machines, and matching N64 source must

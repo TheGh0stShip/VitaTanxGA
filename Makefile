@@ -3,7 +3,7 @@ ROM ?= baseroms/us/baserom.z64
 VITA_ASSETS := assets/extracted/us/vita
 VITA_BUILD := port/vita/build
 
-.PHONY: all verify-rom runtime-test runtime-asset-test runtime-script-asset-test runtime-campaign-asset-test vita-assets vita vita-check clean
+.PHONY: all verify-rom runtime-test runtime-asset-test runtime-script-asset-test runtime-campaign-asset-test vita-assets vita vita-recomp-bootstrap vita-recomp-prepare vita-recomp-check vita-check clean
 
 all: vita-check
 
@@ -82,6 +82,39 @@ vita: vita-assets
 	@test -n "$(VITASDK)" || (echo "Set VITASDK to your VitaSDK installation" >&2; exit 2)
 	cmake -S port/vita -B $(VITA_BUILD) -DCMAKE_BUILD_TYPE=Release
 	cmake --build $(VITA_BUILD)
+
+vita-recomp-bootstrap:
+	port/recomp/bootstrap.sh
+
+port/recomp/generated/.prepared: port/recomp/btga.toml port/recomp/n_aspMain.toml \
+		port/recomp/runtime_compat.h port/recomp/prepare.sh \
+		config/vita/recomp_function_boundaries.toml \
+		tools/make_vita_recomp_header.py $(ROM)
+	port/recomp/prepare.sh
+	@touch $@
+
+vita-recomp-prepare: port/recomp/generated/.prepared
+
+vita-recomp-check: vita-recomp-prepare
+	@test -n "$(VITASDK)" || (echo "Set VITASDK to your VitaSDK installation" >&2; exit 2)
+	$(CC) -std=c11 -Wall -Wextra -Werror -Wpedantic -U__SIZEOF_INT128__ \
+		-Iport/recomp/generated/include port/runtime/tests/recomp_math_test.c \
+		-lm -o /tmp/vitatanxga-recomp-math-test
+	/tmp/vitatanxga-recomp-math-test
+	cmake -S port/vita -B $(VITA_BUILD)-recomp -DCMAKE_BUILD_TYPE=Release -DBTGA_BUILD_RECOMP=ON
+	cmake --build $(VITA_BUILD)-recomp --target btga_recompiled_game_armv7
+	@for object in $$(find $(VITA_BUILD)-recomp/CMakeFiles/btga_recompiled_game_armv7.dir \
+		-name '*.obj' -type f); do \
+		$(VITASDK)/bin/arm-vita-eabi-readelf -h "$$object" | \
+			grep -q 'Class:.*ELF32' || exit 1; \
+		$(VITASDK)/bin/arm-vita-eabi-readelf -h "$$object" | \
+			grep -q 'Machine:.*ARM' || exit 1; \
+		$(VITASDK)/bin/arm-vita-eabi-readelf -A "$$object" | \
+			grep -q 'Tag_CPU_arch: v7' || exit 1; \
+		$(VITASDK)/bin/arm-vita-eabi-readelf -A "$$object" | \
+			grep -q 'Tag_ABI_VFP_args: VFP registers' || exit 1; \
+	done
+	@echo "Verified all translated objects as ELF32 ARMv7 hard-float"
 
 vita-check: runtime-test runtime-asset-test runtime-script-asset-test runtime-campaign-asset-test vita
 	port/vita/verify_elf.sh $(VITA_BUILD)/vitatanxga \
