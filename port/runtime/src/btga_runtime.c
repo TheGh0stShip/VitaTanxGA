@@ -68,14 +68,14 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
             projectile->x > runtime->world_max_x || projectile->z < runtime->world_min_z ||
             projectile->z > runtime->world_max_z) projectile->active = false;
     }
-    follow_x = runtime->player.x - sinf(runtime->player.yaw) * 720.0f;
-    follow_y = runtime->player.y + 430.0f;
-    follow_z = runtime->player.z - cosf(runtime->player.yaw) * 720.0f;
+    follow_x = runtime->player.x - sinf(runtime->player.yaw) * 330.0f;
+    follow_y = runtime->player.y + 180.0f;
+    follow_z = runtime->player.z - cosf(runtime->player.yaw) * 330.0f;
     runtime->camera.x += (follow_x - runtime->camera.x) * 0.18f;
     runtime->camera.y += (follow_y - runtime->camera.y) * 0.18f;
     runtime->camera.z += (follow_z - runtime->camera.z) * 0.18f;
     runtime->camera.yaw = runtime->player.yaw;
-    runtime->camera.pitch = -0.32f;
+    runtime->camera.pitch = -0.42f;
 }
 
 void btga_runtime_set_terrain(BtgaRuntime *runtime, const BtgaTerrain *terrain) {
@@ -99,11 +99,11 @@ void btga_runtime_set_player_spawn(BtgaRuntime *runtime, float x, float y,
     runtime->player.z = z;
     runtime->player.yaw = heading;
     runtime->player.turret_yaw = 0.0f;
-    runtime->camera.x = x - sinf(heading) * 720.0f;
-    runtime->camera.y = y + 430.0f;
-    runtime->camera.z = z - cosf(heading) * 720.0f;
+    runtime->camera.x = x - sinf(heading) * 330.0f;
+    runtime->camera.y = y + 180.0f;
+    runtime->camera.z = z - cosf(heading) * 330.0f;
     runtime->camera.yaw = heading;
-    runtime->camera.pitch = -0.32f;
+    runtime->camera.pitch = -0.42f;
 }
 
 void btga_runtime_init(BtgaRuntime *runtime, bool assets_ready) {
@@ -112,7 +112,7 @@ void btga_runtime_init(BtgaRuntime *runtime, bool assets_ready) {
     }
 
     *runtime = (BtgaRuntime){
-        .camera = {0.0f, 430.0f, -144.0f, 0.0f, -0.32f},
+        .camera = {0.0f, 180.0f, 246.0f, 0.0f, -0.42f},
         .player = {0.0f, 0.0f, 576.0f, 0.0f, 0.0f, 0.0f, 100, 200, 0},
         .world_min_x = -9000.0f,
         .world_min_z = -9000.0f,
