@@ -193,18 +193,21 @@ struct TextureCacheKey {
     uint8_t palette_index;
     uint32_t size_bytes;
 
-#ifdef __vita__
     bool operator==(const TextureCacheKey& rhs) const {
-        return !sceClibMemcmp(&rhs, this, sizeof(TextureCacheKey));
-    };
+        return texture_addr == rhs.texture_addr &&
+               palette_addrs[0] == rhs.palette_addrs[0] &&
+               palette_addrs[1] == rhs.palette_addrs[1] &&
+               fmt == rhs.fmt && siz == rhs.siz &&
+               palette_index == rhs.palette_index &&
+               size_bytes == rhs.size_bytes;
+    }
+#ifdef __vita__
     struct Hasher {
         size_t operator()(const TextureCacheKey& key) const noexcept {
             return (size_t)key.texture_addr;
         }
     };
 #else
-    bool operator==(const TextureCacheKey&) const noexcept = default;
-
     struct Hasher {
         size_t operator()(const TextureCacheKey& key) const noexcept {
             uintptr_t addr = (uintptr_t)key.texture_addr;
