@@ -88,7 +88,7 @@ typedef struct BtgaPickup {
 
 enum {
     BTGA_MAX_PROJECTILES = 32,
-    BTGA_MAX_ENEMIES = 8,
+    BTGA_MAX_ENEMIES = 20,
     BTGA_MAX_PICKUPS = 64,
     BTGA_PICKUP_KIND_COUNT = 20,
 };

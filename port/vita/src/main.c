@@ -32,10 +32,13 @@ int main(void) {
                 btga_runtime_add_ally(&runtime, spawn.x, spawn.y, spawn.z,
                                       spawn.yaw);
         }
-        for (column = 0; column < 5; column++) {
-            if (vita_platform_spawn(1, column, &spawn))
-                btga_runtime_add_enemy(&runtime, spawn.x, spawn.y, spawn.z,
-                                       spawn.yaw);
+        uint8_t team;
+        for (team = 1; team < 4; team++) {
+            for (column = 0; column < 5; column++) {
+                if (vita_platform_spawn(team, column, &spawn))
+                    btga_runtime_add_enemy(&runtime, spawn.x, spawn.y, spawn.z,
+                                           spawn.yaw);
+            }
         }
     }
     {

@@ -55,7 +55,7 @@ static BtgaWorldPickup s_pickups[kMaximumPickups];
 static uint16_t s_pickup_model_indices[kMaximumPickups];
 static size_t s_pickup_count;
 
-enum { kMaximumProjectedTriangles = 2048, kMaximumTextureCache = 256 };
+enum { kMaximumProjectedTriangles = 8192, kMaximumTextureCache = 256 };
 
 typedef struct CachedTexture {
     uint32_t texture_offset;
@@ -298,13 +298,13 @@ static bool load_campaign_text(void) {
 
 static bool load_first_world(void) {
     static const char *const paths[7] = {
-        "app0:assets/worlds/level_world_000/component0.bin",
-        "app0:assets/worlds/level_world_000/component1.bin",
-        "app0:assets/worlds/level_world_000/component2.bin",
-        "app0:assets/worlds/level_world_000/component3.bin",
-        "app0:assets/worlds/level_world_000/component4.bin",
-        "app0:assets/worlds/level_world_000/component5.bin",
-        "app0:assets/worlds/level_world_000/component6.bin",
+        "app0:assets/worlds/level_world_127/component0.bin",
+        "app0:assets/worlds/level_world_127/component1.bin",
+        "app0:assets/worlds/level_world_127/component2.bin",
+        "app0:assets/worlds/level_world_127/component3.bin",
+        "app0:assets/worlds/level_world_127/component4.bin",
+        "app0:assets/worlds/level_world_127/component5.bin",
+        "app0:assets/worlds/level_world_127/component6.bin",
     };
     static const char *const common_paths[7] = {
         "app0:assets/worlds/common_world/component0.bin",
@@ -316,13 +316,13 @@ static bool load_first_world(void) {
         "app0:assets/worlds/common_world/component6.bin",
     };
     static const char *const spawn_paths[7] = {
-        "app0:assets/worlds/level_world_001/component0.bin",
-        "app0:assets/worlds/level_world_001/component1.bin",
-        "app0:assets/worlds/level_world_001/component2.bin",
-        "app0:assets/worlds/level_world_001/component3.bin",
-        "app0:assets/worlds/level_world_001/component4.bin",
-        "app0:assets/worlds/level_world_001/component5.bin",
-        "app0:assets/worlds/level_world_001/component6.bin",
+        "app0:assets/worlds/level_world_131/component0.bin",
+        "app0:assets/worlds/level_world_131/component1.bin",
+        "app0:assets/worlds/level_world_131/component2.bin",
+        "app0:assets/worlds/level_world_131/component3.bin",
+        "app0:assets/worlds/level_world_131/component4.bin",
+        "app0:assets/worlds/level_world_131/component5.bin",
+        "app0:assets/worlds/level_world_131/component6.bin",
     };
     bool valid = false;
     unsigned int index;
@@ -386,7 +386,14 @@ static bool load_first_world(void) {
                                             kMaximumPickups, &s_pickup_count);
         for (index = 0; valid && index < s_pickup_count; index++) {
             uint16_t model_id;
-            valid = btga_pickup_model_id(s_gameplay_data.data,
+            if (s_pickups[index].kind == 20) {
+                uint32_t roll = (uint16_t)s_pickups[index].x * 1103515245u +
+                                (uint16_t)s_pickups[index].z * 12345u;
+                valid = btga_pickup_random_kind(s_gameplay_data.data,
+                                                s_gameplay_data.size, roll,
+                                                &s_pickups[index].kind);
+            }
+            valid = valid && btga_pickup_model_id(s_gameplay_data.data,
                                          s_gameplay_data.size,
                                          s_pickups[index].kind, &model_id) &&
                     btga_common_model_index(&s_common_components, model_id,

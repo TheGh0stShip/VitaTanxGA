@@ -20,8 +20,10 @@ The repository currently produces an installable PS Vita VPK that:
   turret aiming, firing, ammunition, projectiles, and a following camera;
 - resolves and renders the player's original tank asset through the recovered
   shared model-ID table, including body, turret, treads, and detail layers;
-- creates the recovered three-tank allied escort and full five-tank opposing
-  formation, with team-aware steering, pursuit, firing, projectile ownership,
+- loads the campaign dispatcher-selected SF Airport world/actor pair rather
+  than the unrelated multiplayer pair previously used;
+- creates the recovered three-tank allied escort and full fifteen-tank
+  opposing formation, with team-aware steering, pursuit, firing, projectile ownership,
   hit detection, damage, and enemy-only mission completion;
 - resolves and renders all 41 first-mission pickup placements through the
   recovered pickup-kind/model table and original textured common-world models,

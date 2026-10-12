@@ -44,7 +44,7 @@ placement/model/part/reference graph. It decodes the paired state and texture
 commands, uploads native Vita textures, and renders the placed scene with a
 37-degree perspective camera and GXM depth testing. Portable gameplay state
 currently covers tank movement, terrain following, turret aim, projectiles,
-ammunition, the recovered three-allied/five-opposing first-mission formation,
+ammunition, the recovered three-allied/fifteen-opposing first-mission formation,
 team-aware pursuit and firing, damage, enemy-only victory evaluation,
 repeatable mission resets, and title/gameplay/pause
 transitions. Tank body, turret, tread, and color-detail layers are resolved
@@ -58,6 +58,12 @@ guided missiles, gun buddies, nukes, mines, teleporters, plasma bolts, turbo,
 shields, bouncing betties, flamethrower, cloaking, grenades, tank bucks, and
 radar. Collected models leave the scene, HUD feedback names the item, and a
 mission restart restores the full placement set and clears its inventory.
+
+Mission zero uses level ID 26 in the recovered campaign configuration. The
+single-player branch of the retail asset dispatcher maps that ID to
+`level_world_127` for SF Airport geometry and `level_world_131` for actors,
+spawns, and pickups. The port follows that mapping; the earlier `000`/`001`
+pair belongs to a different mode and is not used as campaign mission zero.
 
 The frontend executes the recovered opening narrative and then displays the
 retail mission-zero location, objective, and complete briefing through the
@@ -76,8 +82,9 @@ rewriting the extracted strings. Execution of world-object, camera, and combat
 mission streams remains to be connected to their runtime consumers.
 
 `make vita-check` tests the portable loaders against synthetic malformed
-inputs and all 1,287 geometry/state references plus all 1,285 textured
-references in the extracted first-level data,
+inputs and all 277 geometry/state references plus all 275 textured references
+in the extracted SF Airport data. The placed scene gate covers 710 renderable
+placements and 6,303 triangles,
 The gate additionally validates all 23,483 commands in the extracted first
 campaign script and executes the opening stream to its terminator while
 requiring all seven retail text events. It also checks the extracted campaign

@@ -140,7 +140,7 @@ int main(int argc, char **argv) {
         size_t pickup_count;
         uint8_t team, column;
         if (!btga_world_validate(&spawn_components, &spawn_summary)) goto cleanup;
-        for (team = 0; team < 2; team++) {
+        for (team = 0; team < 4; team++) {
             for (column = 0; column < 5; column++) {
                 if (!btga_world_find_spawn(&spawn_components, team, column, &spawn)) {
                     fprintf(stderr, "missing team %u column %u spawn\n", team, column);
@@ -157,6 +157,15 @@ int main(int argc, char **argv) {
             uint16_t model_id;
             uint16_t model_index;
             uint32_t pickup_triangles;
+            if (pickups[index].kind == 20) {
+                uint32_t roll = (uint16_t)pickups[index].x * 1103515245u +
+                                (uint16_t)pickups[index].z * 12345u;
+                if (!btga_pickup_random_kind(gameplay.data, gameplay.size,
+                                             roll, &pickups[index].kind)) {
+                    fprintf(stderr, "random pickup failed validation\n");
+                    goto cleanup;
+                }
+            }
             if (!btga_pickup_model_id(gameplay.data, gameplay.size,
                                       pickups[index].kind, &model_id) ||
                 !btga_common_model_index(&common_components, model_id,
@@ -170,7 +179,7 @@ int main(int argc, char **argv) {
                 goto cleanup;
             }
         }
-        printf("spawn formation validated: 5 player, 5 opposing, 41 pickups\n");
+        printf("spawn formation validated: 4 teams, 20 slots, 41 pickups\n");
     }
     if (!btga_world_validate(&common_components, &common_summary) ||
         common_summary.model_count != 244 ||
@@ -186,9 +195,9 @@ int main(int argc, char **argv) {
     printf("common tank model validated: model %u, %u triangles\n",
            tank_model_index, tank_triangles);
     if (!btga_world_validate(&components, &summary) ||
-        summary.group_count != 2 || summary.placement_count != 1035 ||
-        summary.model_count != 135 || summary.part_count != 135 ||
-        summary.reference_count != 1287) {
+        summary.group_count != 1 || summary.placement_count != 770 ||
+        summary.model_count != 59 || summary.part_count != 59 ||
+        summary.reference_count != 277) {
         fprintf(stderr, "extracted world validation failed\n");
         goto cleanup;
     }
@@ -246,11 +255,11 @@ int main(int argc, char **argv) {
            (unsigned long long)triangles, (unsigned long long)vertex_loads);
     printf("textures decoded: %u references, %u unsupported\n", decoded_textures,
            unsupported_textures);
-    if (decoded_textures != 1285 || unsupported_textures != 0) {
+    if (decoded_textures != 275 || unsupported_textures != 0) {
         fprintf(stderr, "texture totals disagree with the verified corpus\n");
         goto cleanup;
     }
-    if (triangles != 3958 || vertex_loads != 1345) {
+    if (triangles != 1358 || vertex_loads != 293) {
         fprintf(stderr, "geometry totals disagree with the verified corpus\n");
         goto cleanup;
     }
@@ -262,8 +271,8 @@ int main(int argc, char **argv) {
     printf("scene traversed: %u placements, %u triangles\n",
            scene_summary.renderable_placement_count,
            scene_summary.visited_triangle_count);
-    if (scene_summary.renderable_placement_count != 969 ||
-        scene_summary.visited_triangle_count != 4144) {
+    if (scene_summary.renderable_placement_count != 710 ||
+        scene_summary.visited_triangle_count != 6303) {
         fprintf(stderr, "placed scene totals disagree with the verified corpus\n");
         goto cleanup;
     }
@@ -275,7 +284,7 @@ int main(int argc, char **argv) {
     }
     printf("terrain built: %u/%u cells populated\n", terrain.populated_cell_count,
            BTGA_TERRAIN_WIDTH * BTGA_TERRAIN_HEIGHT);
-    if (terrain.populated_cell_count != 7907) {
+    if (terrain.populated_cell_count != 7705) {
         fprintf(stderr, "terrain coverage disagrees with the verified corpus\n");
         goto cleanup;
     }

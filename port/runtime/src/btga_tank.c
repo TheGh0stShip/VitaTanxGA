@@ -3,6 +3,7 @@
 #define BTGA_GAMEPLAY_VRAM UINT32_C(0x80122384)
 #define BTGA_TANK_BANK_VRAM UINT32_C(0x80122E28)
 #define BTGA_PICKUP_MODEL_BANK_VRAM UINT32_C(0x80123B1C)
+#define BTGA_PICKUP_WEIGHT_BANK_VRAM UINT32_C(0x80123B04)
 enum { BTGA_TANK_RECORD_SIZE = 0xD0u };
 
 static uint32_t read_be_u32(const uint8_t *p) {
@@ -21,6 +22,27 @@ bool btga_pickup_model_id(const uint8_t *data, size_t size,
     if (value >= 263u) return false;
     *model_id = (uint16_t)value;
     return true;
+}
+
+bool btga_pickup_random_kind(const uint8_t *data, size_t size,
+                             uint32_t roll, uint8_t *pickup_kind) {
+    size_t offset = BTGA_PICKUP_WEIGHT_BANK_VRAM - BTGA_GAMEPLAY_VRAM;
+    uint32_t total = 0;
+    uint8_t kind;
+    if (data == NULL || pickup_kind == NULL || offset > size ||
+        20u > size - offset) return false;
+    for (kind = 0; kind < 20; kind++) total += data[offset + kind];
+    if (total == 0) return false;
+    roll %= total;
+    for (kind = 0; kind < 20; kind++) {
+        uint8_t weight = data[offset + kind];
+        if (roll < weight) {
+            *pickup_kind = kind;
+            return true;
+        }
+        roll -= weight;
+    }
+    return false;
 }
 
 bool btga_tank_definition(const uint8_t *data, size_t size, uint8_t kind,

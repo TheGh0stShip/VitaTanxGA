@@ -18,6 +18,7 @@ int btga_tank_tests(void) {
     };
     unsigned int index;
     uint16_t pickup_model;
+    uint8_t pickup_kind;
     memset(data, 0, sizeof(data));
     write_be_u32(data + 0xAA4, 7);
     write_be_u32(data + 0xAA8, 0x801225E0u);
@@ -35,5 +36,11 @@ int btga_tank_tests(void) {
     assert(btga_pickup_model_id(data, sizeof(data), 1, &pickup_model));
     assert(pickup_model == 14);
     assert(!btga_pickup_model_id(data, sizeof(data), 20, &pickup_model));
+    data[0x1781] = 2;
+    data[0x1783] = 1;
+    assert(btga_pickup_random_kind(data, sizeof(data), 0, &pickup_kind));
+    assert(pickup_kind == 1);
+    assert(btga_pickup_random_kind(data, sizeof(data), 2, &pickup_kind));
+    assert(pickup_kind == 3);
     return 0;
 }

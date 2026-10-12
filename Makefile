@@ -39,12 +39,12 @@ runtime-asset-test: vita-assets
 		port/runtime/src/btga_material.c \
 		port/runtime/src/btga_texture.c \
 		port/runtime/tests/world_asset_test.c -lm -o /tmp/vitatanxga-world-asset-test
-	/tmp/vitatanxga-world-asset-test $(VITA_ASSETS)/worlds/level_world_000 \
+	/tmp/vitatanxga-world-asset-test $(VITA_ASSETS)/worlds/level_world_127 \
 		$(VITA_ASSETS)/world-pools/geometry.bin \
 		$(VITA_ASSETS)/world-pools/state.bin \
 		$(VITA_ASSETS)/world-pools/texture.bin \
 		$(VITA_ASSETS)/worlds/common_world \
-		$(VITA_ASSETS)/worlds/level_world_001 \
+		$(VITA_ASSETS)/worlds/level_world_131 \
 		$(VITA_ASSETS)/gameplay/gameplay.bin
 
 runtime-script-asset-test: vita-assets
