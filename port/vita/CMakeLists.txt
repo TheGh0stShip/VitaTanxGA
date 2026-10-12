@@ -51,6 +51,7 @@ target_link_options(${PROJECT_NAME} PRIVATE
 target_link_libraries(${PROJECT_NAME} PRIVATE
   vita2d
   SceCtrl_stub
+  SceAudio_stub
   SceDisplay_stub
   SceGxm_stub
   SceCommonDialog_stub
@@ -79,6 +80,7 @@ set(VITA_GAME_FILES
   "${VITA_ASSET_ROOT}/gameplay/projectile_0.i8"
   "${VITA_ASSET_ROOT}/gameplay/projectile_1.i8"
   "${VITA_ASSET_ROOT}/gameplay/projectile_2.i8"
+  "${VITA_ASSET_ROOT}/audio/cannon.pcm16le"
   "${VITA_ASSET_ROOT}/campaign/campaign_text.bin"
   "${VITA_ASSET_ROOT}/campaign/campaign_config.bin"
   "${VITA_ASSET_ROOT}/scripts/script_00_514720/header.bin"

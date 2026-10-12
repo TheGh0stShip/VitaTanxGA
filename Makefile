@@ -73,6 +73,7 @@ vita-assets: verify-rom
 	$(PYTHON) tools/extract_lzari_images.py $(VITA_ASSETS)/images --rom $(ROM)
 	$(PYTHON) tools/extract_lzari_worlds.py $(VITA_ASSETS)/worlds --rom $(ROM)
 	$(PYTHON) tools/extract_gameplay_data.py $(VITA_ASSETS)/gameplay --rom $(ROM)
+	$(PYTHON) tools/extract_vita_audio.py $(VITA_ASSETS)/audio --rom $(ROM)
 	$(PYTHON) tools/extract_campaign_data.py $(VITA_ASSETS)/campaign --rom $(ROM)
 	$(PYTHON) tools/inventory_script_assets.py --rom $(ROM) --output $(VITA_ASSETS)/scripts_manifest.json --extract-dir $(VITA_ASSETS)/scripts
 	$(PYTHON) tools/inventory_libmus_assets.py --rom $(ROM) --output $(VITA_ASSETS)/libmus_manifest.json --extract-dir $(VITA_ASSETS)/libmus

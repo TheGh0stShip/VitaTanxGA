@@ -7,7 +7,9 @@
 #include "btga_campaign.h"
 
 #include <psp2/ctrl.h>
+#include <psp2/audioout.h>
 #include <psp2/kernel/processmgr.h>
+#include <psp2/kernel/threadmgr.h>
 #include <vita2d.h>
 
 #include <stdio.h>
@@ -43,6 +45,7 @@ static LoadedFile s_world_files[7];
 static LoadedFile s_common_files[7];
 static LoadedFile s_spawn_files[7];
 static LoadedFile s_gameplay_data;
+static LoadedFile s_cannon_pcm;
 static LoadedFile s_geometry_pool;
 static LoadedFile s_state_pool;
 static LoadedFile s_texture_pool;
@@ -113,6 +116,16 @@ static vita2d_texture_vertex s_texture_vertices[kMaximumProjectedTriangles * 3];
 static CachedTexture s_texture_cache[kMaximumTextureCache];
 static uint32_t s_texture_cache_count;
 static CachedTexture s_projectile_textures[3];
+static SceUID s_audio_thread = -1;
+static int s_audio_port = -1;
+static volatile bool s_audio_stop;
+static volatile uint32_t s_audio_request_serial;
+
+enum {
+    kAudioFrames = 1024,
+    kAudioOutputRate = 48000,
+    kCannonSampleRate = 22050,
+};
 
 static const CachedTexture *find_cached_texture(uint32_t texture_offset,
                                                 uint32_t texture_size,
@@ -261,6 +274,97 @@ static bool load_file(const char *path, LoadedFile *loaded) {
     }
     fclose(file);
     return true;
+}
+
+static int audio_thread_entry(SceSize args, void *argument) {
+    int16_t buffer[kAudioFrames * 2] __attribute__((aligned(64)));
+    uint32_t observed_serial = 0;
+    uint32_t source_position = 0;
+    const uint32_t source_step =
+        (uint32_t)(((uint64_t)kCannonSampleRate << 16) / kAudioOutputRate);
+    const uint32_t sample_count = (uint32_t)(s_cannon_pcm.size / 2u);
+    bool playing = false;
+    (void)args;
+    (void)argument;
+    while (!s_audio_stop) {
+        unsigned int frame;
+        uint32_t requested = s_audio_request_serial;
+        if (requested != observed_serial) {
+            observed_serial = requested;
+            source_position = 0;
+            playing = true;
+        }
+        for (frame = 0; frame < kAudioFrames; frame++) {
+            int16_t sample = 0;
+            uint32_t source_index = source_position >> 16;
+            if (playing && source_index < sample_count) {
+                const uint8_t *source = s_cannon_pcm.data + source_index * 2u;
+                sample = (int16_t)((uint16_t)source[0] |
+                                   ((uint16_t)source[1] << 8));
+                source_position += source_step;
+            } else {
+                playing = false;
+            }
+            buffer[frame * 2] = sample;
+            buffer[frame * 2 + 1] = sample;
+        }
+        if (sceAudioOutOutput(s_audio_port, buffer) < 0) break;
+    }
+    return 0;
+}
+
+static bool audio_start(void) {
+    int volume[2] = {0x6000, 0x6000};
+    if (!load_file("app0:assets/audio/cannon.pcm16le", &s_cannon_pcm) ||
+        (s_cannon_pcm.size & 1u) != 0 || s_cannon_pcm.size > UINT32_MAX) {
+        free(s_cannon_pcm.data);
+        s_cannon_pcm = (LoadedFile){0};
+        return false;
+    }
+    s_audio_port = sceAudioOutOpenPort(SCE_AUDIO_OUT_PORT_TYPE_MAIN,
+                                       kAudioFrames, kAudioOutputRate,
+                                       SCE_AUDIO_OUT_MODE_STEREO);
+    if (s_audio_port < 0) {
+        free(s_cannon_pcm.data);
+        s_cannon_pcm = (LoadedFile){0};
+        return false;
+    }
+    sceAudioOutSetVolume(s_audio_port,
+                         SCE_AUDIO_VOLUME_FLAG_L_CH |
+                         SCE_AUDIO_VOLUME_FLAG_R_CH,
+                         volume);
+    s_audio_stop = false;
+    s_audio_request_serial = 0;
+    s_audio_thread = sceKernelCreateThread("vitatanxga_audio",
+                                           audio_thread_entry, 0x10000100,
+                                           0x10000, 0, 0, NULL);
+    if (s_audio_thread < 0 ||
+        sceKernelStartThread(s_audio_thread, 0, NULL) < 0) {
+        if (s_audio_thread >= 0) sceKernelDeleteThread(s_audio_thread);
+        s_audio_thread = -1;
+        sceAudioOutReleasePort(s_audio_port);
+        s_audio_port = -1;
+        free(s_cannon_pcm.data);
+        s_cannon_pcm = (LoadedFile){0};
+        return false;
+    }
+    return true;
+}
+
+static void audio_stop(void) {
+    if (s_audio_thread >= 0) {
+        int status;
+        s_audio_stop = true;
+        sceKernelWaitThreadEnd(s_audio_thread, &status, NULL);
+        sceKernelDeleteThread(s_audio_thread);
+        s_audio_thread = -1;
+    }
+    if (s_audio_port >= 0) {
+        sceAudioOutReleasePort(s_audio_port);
+        s_audio_port = -1;
+    }
+    free(s_cannon_pcm.data);
+    s_cannon_pcm = (LoadedFile){0};
 }
 
 static bool load_projectile_textures(void) {
@@ -877,6 +981,7 @@ bool vita_platform_startup(void) {
     }
     s_world_ready = load_first_world() && validate_first_mission() &&
                     load_campaign_text();
+    if (s_world_ready) s_world_ready = audio_start();
     return true;
 }
 
@@ -1020,6 +1125,7 @@ void vita_platform_begin_frame(void) {
 
 void vita_platform_draw(const BtgaRuntime *runtime) {
     const BtgaWorldSummary *world = vita_platform_world_summary();
+    s_audio_request_serial = runtime->cannon_sound_serial;
     vita2d_draw_rectangle(0, 0, 960, 544, kColorBlack);
     vita2d_draw_rectangle(54, 112, 8, 270, kColorOrange);
     if ((runtime->screen == BTGA_SCREEN_GAMEPLAY ||
@@ -1106,6 +1212,7 @@ void vita_platform_end_frame(void) {
 
 void vita_platform_shutdown(void) {
     unsigned int index;
+    audio_stop();
     if (s_font != NULL) {
         vita2d_free_pgf(s_font);
         s_font = NULL;

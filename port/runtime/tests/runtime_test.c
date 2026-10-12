@@ -90,10 +90,12 @@ int main(void) {
     assert(btga_runtime_active_pickups(&runtime) == 0);
     assert(runtime.last_pickup_kind == 4 && runtime.pickup_message_ticks != 0);
     assert(runtime.projectiles[0].active);
+    assert(runtime.cannon_sound_serial == 1);
     input.pressed = 0;
     btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US * 4);
     btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US * 4);
     assert(runtime.player.ammo == 99);
+    assert(runtime.cannon_sound_serial == 2);
 
     input = (BtgaInput){.held = BTGA_BUTTON_ALT_FIRE,
                         .pressed = BTGA_BUTTON_ALT_FIRE};

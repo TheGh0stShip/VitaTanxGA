@@ -22,6 +22,9 @@ The repository currently produces an installable PS Vita VPK that:
   rendered with the recovered
   transparent N64 intensity sprite, retail pickup-to-weapon inventory mapping,
   secondary fire, weapon cycling, shields, and a following camera;
+- resolves the retail M1A1 cannon effect to libmus SFX wave 3, decodes its
+  N64 ADPCM predictor stream during asset extraction, and plays the compact
+  PCM result through a dedicated Vita audio thread when a shot is created;
 - resolves and renders the player's original tank asset through the recovered
   shared model-ID table, including body, turret, treads, and detail layers;
 - loads the campaign dispatcher-selected SF Airport world/actor pair rather
@@ -38,8 +41,9 @@ The repository currently produces an installable PS Vita VPK that:
   with retail health, ammunition, weapon inventory, tank-buck, and radar effects;
 - derives navigation heights from the placed retail level geometry;
 - loads and validates the first extracted world's big-endian component tables;
-- packages decoded worlds, shared world pools, images, scripts, libmus audio
-  resources, and the original campaign text and mission-configuration tables;
+- packages only runtime-opened decoded worlds, shared world pools, projectile
+  sprites, the decoded cannon effect, mission scripts, and original campaign
+  text/configuration tables;
 - presents the recovered San Francisco Airport location, objective, and full
   mission briefing between the opening narrative and deployment;
 - parses the first retail campaign script's 41 streams and 23,483
@@ -48,7 +52,7 @@ The repository currently produces an installable PS Vita VPK that:
 - validates the executable and code-bearing libraries for ABI consistency.
 
 This is an **early runtime port**, not yet the complete game. Retail enemy and
-object behavior, execution of the remaining mission commands, complete weapon rules, audio,
+object behavior, execution of the remaining mission commands, complete weapon rules, remaining sound effects and music,
 the complete frontend, saving, and remaining platform services are still being
 ported from the recovered implementation.
 

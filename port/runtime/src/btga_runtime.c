@@ -32,6 +32,7 @@ static bool spawn_projectile(BtgaRuntime *runtime, float x, float y, float z,
         projectile->team = team;
         projectile->weapon = weapon;
         projectile->active = true;
+        if (weapon == 1) runtime->cannon_sound_serial++;
         return true;
     }
     return false;

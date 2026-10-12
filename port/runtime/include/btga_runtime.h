@@ -106,6 +106,7 @@ enum {
 
 typedef struct BtgaRuntime {
     uint64_t simulation_ticks;
+    uint32_t cannon_sound_serial;
     uint32_t accumulator_us;
     uint32_t pending_pressed;
     BtgaCamera camera;

@@ -70,6 +70,13 @@ shields, bouncing betties, flamethrower, cloaking, grenades, tank bucks, and
 radar. Collected models leave the scene, HUD feedback names the item, and a
 mission restart restores the full placement set and clears its inventory.
 
+The asset pipeline resolves the M1A1's retail cannon sound ID 3 through the
+libmus effect bytecode to SFX wave 3 and decodes its order-2 N64 ADPCM stream
+with the stored predictor book. Only the resulting 20,896-sample mono PCM
+effect is packaged. A dedicated Vita audio thread resamples the original
+22,050 Hz mix rate to the hardware's 48 kHz stereo output and restarts the
+effect only when simulation state reports a successfully created cannon shot.
+
 Mission zero uses level ID 26 in the recovered campaign configuration. The
 single-player branch of the retail asset dispatcher maps that ID to
 `level_world_127` for SF Airport geometry and `level_world_131` for actors,
