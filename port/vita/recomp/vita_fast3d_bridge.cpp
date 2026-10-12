@@ -757,7 +757,16 @@ void* Fast3DMemoryBridge::TranslateList(u32 address, GBIVersion& version, u32 de
                 const u32 nextW0 = Read32(nextPc);
                 const u32 nextW1 = Read32(nextPc + 4);
                 const u8 nextOp = (u8)(nextW0 >> 24);
-                if (nextOp == G_RDP_SETTIMG) break;
+                if (nextOp == G_RDP_SETTIMG) {
+                    // gDPLoadTextureTile commonly repeats an identical
+                    // SetTextureImage before every strip. It does not change
+                    // the source, so keep scanning and stage that image once.
+                    if (nextW0 == mTextureImageW0 && Resolve(nextW1) == mTextureImageResolved) {
+                        continue;
+                    }
+                    break;
+                }
+                if (nextOp == G_RDP_LOADBLOCK || nextOp == G_RDP_LOADTLUT) break;
                 if (nextOp != G_RDP_LOADTILE) continue;
 
                 const u32 nextUls = (nextW0 >> 12) & 0xFFF;
