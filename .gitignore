@@ -1,0 +1,13 @@
+*.z64
+*.n64
+*.v64
+*.vpk
+*.self
+*.velf
+*.psp2dmp
+assets/extracted/
+port/vita/build/
+baseroms/*/baserom.*
+!baseroms/*/.gitkeep
+__pycache__/
+AGENTS.md

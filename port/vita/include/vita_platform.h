@@ -1,0 +1,25 @@
+#ifndef VITATANXGA_VITA_PLATFORM_H
+#define VITATANXGA_VITA_PLATFORM_H
+
+#include <stdbool.h>
+#include <stdint.h>
+
+/*
+ * This is the first narrow platform seam for the future portable runtime.
+ * N64 ROM addresses must cross it as uint32_t tokens, never host pointers.
+ */
+typedef uint32_t BtgaAddress;
+
+_Static_assert(sizeof(BtgaAddress) == 4, "N64 address tokens are 32-bit");
+_Static_assert(sizeof(int) == 4, "PS Vita uses a 32-bit int ABI");
+_Static_assert(sizeof(long) == 4, "PS Vita must use the ILP32 ABI");
+_Static_assert(sizeof(void *) == 4, "PS Vita pointers must be 32-bit");
+
+bool vita_platform_startup(void);
+bool vita_platform_should_quit(void);
+void vita_platform_begin_frame(void);
+void vita_platform_draw_bootstrap(void);
+void vita_platform_end_frame(void);
+void vita_platform_shutdown(void);
+
+#endif
