@@ -18,7 +18,8 @@ The repository currently produces an installable PS Vita VPK that:
   wrap/mirror/clamp sampling, material colors, separate opaque/alpha depth
   handling, placements, depth testing, and yaw transforms;
 - provides title, gameplay, and pause states with controllable tank movement,
-  turret aiming, firing, ammunition, projectiles rendered with the recovered
+  turret aiming, cooldown-limited held-trigger firing, ammunition, projectiles
+  rendered with the recovered
   transparent N64 intensity sprite, and a following camera;
 - resolves and renders the player's original tank asset through the recovered
   shared model-ID table, including body, turret, treads, and detail layers;

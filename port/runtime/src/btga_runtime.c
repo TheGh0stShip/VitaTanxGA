@@ -153,7 +153,7 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
                                 &terrain_height)) runtime->player.y = terrain_height;
     }
     if (runtime->player.fire_cooldown != 0) runtime->player.fire_cooldown--;
-    if ((pressed & BTGA_BUTTON_FIRE) != 0)
+    if (((input->held | pressed) & BTGA_BUTTON_FIRE) != 0)
         spawn_projectile(runtime, runtime->player.x, runtime->player.y,
                          runtime->player.z,
                          runtime->player.yaw + runtime->player.turret_yaw, 0, 0);
