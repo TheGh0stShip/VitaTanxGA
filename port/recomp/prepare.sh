@@ -21,6 +21,7 @@ rm -rf generated/functions generated/battletanx_ga.bin generated/n_aspMain.cpp
 "$rsp_recomp" n_aspMain.toml
 python3 "$root/tools/make_vita_recomp_header.py" "$runtime_header" \
     generated/include/recomp.h
+python3 "$root/tools/rename_vita_recomp_symbols.py" generated/functions
 
 count="$(find generated/functions -name 'funcs_*.c' -type f | wc -l)"
 [[ "$count" -eq 35 ]] || {

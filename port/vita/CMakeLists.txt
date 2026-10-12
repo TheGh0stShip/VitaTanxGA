@@ -16,6 +16,7 @@ include("${VITASDK}/share/vita.cmake" REQUIRED)
 
 option(BTGA_BUILD_RECOMP "ARM compile-check locally generated full-game translation" OFF)
 option(BTGA_BUILD_RECOMP_RUNTIME "Compile the Vita N64 runtime integration" OFF)
+option(BTGA_BUILD_FULL_RECOMP_APP "Link the translated game as a Vita application" OFF)
 
 set(VITA_APP_NAME "VitaTanx GA")
 # Reserved for this homebrew port; change only before distributing a build.
@@ -119,8 +120,8 @@ if(BTGA_BUILD_RECOMP)
       ${BTGA_LIBRECOMP}/src/ai.cpp
       ${BTGA_LIBRECOMP}/src/cont.cpp
       ${BTGA_LIBRECOMP}/src/dp.cpp
+      ${BTGA_LIBRECOMP}/src/files.cpp
       ${BTGA_LIBRECOMP}/src/math_routines.cpp
-      ${BTGA_LIBRECOMP}/src/pak.cpp
       ${BTGA_LIBRECOMP}/src/pi.cpp
       ${BTGA_LIBRECOMP}/src/rsp.cpp
       ${BTGA_LIBRECOMP}/src/sp.cpp
@@ -128,8 +129,15 @@ if(BTGA_BUILD_RECOMP)
       ${BTGA_LIBRECOMP}/src/vi.cpp
       ${BTGA_RECOMP_ROOT}/generated/n_aspMain.cpp
       recomp/vita_recomp_lookup.cpp
+      recomp/vita_recomp_core.cpp
       recomp/vita_runtime_compat.cpp
       recomp/vita_runtime_patches.cpp
+      recomp/vita_fast3d_bridge.cpp
+      recomp/vita_recomp_renderer.cpp
+      recomp/controller_pak.cpp
+      recomp/controller_pak_hle.cpp
+      vendor/fast3d/src/interpreter.cpp
+      vendor/fast3d/src/gfx_opengl.cpp
     )
     target_compile_features(btga_vita_recomp_runtime PRIVATE cxx_std_20)
     target_include_directories(btga_vita_recomp_runtime PRIVATE
@@ -144,13 +152,59 @@ if(BTGA_BUILD_RECOMP)
       "${BTGA_N64_RUNTIME_ROOT}/thirdparty"
       "${BTGA_N64_RUNTIME_ROOT}/thirdparty/concurrentqueue"
       "${BTGA_N64_RUNTIME_ROOT}/thirdparty/sse2neon"
+      "${CMAKE_CURRENT_SOURCE_DIR}/vendor/fast3d/include"
+      "${CMAKE_CURRENT_SOURCE_DIR}/recomp/include"
     )
     target_compile_options(btga_vita_recomp_runtime PRIVATE
       -fno-strict-aliasing -Wno-unused-parameter -Wno-unused-variable
     )
+    target_compile_definitions(btga_vita_recomp_runtime PRIVATE
+      ENABLE_OPENGL GBI_FLOATS
+    )
     target_link_libraries(btga_vita_recomp_runtime PUBLIC
       btga_recompiled_game_armv7
     )
+
+    if(BTGA_BUILD_FULL_RECOMP_APP)
+      add_executable(vitatanxga_recomp recomp/vita_recomp_main.cpp)
+      target_compile_features(vitatanxga_recomp PRIVATE cxx_std_20)
+      target_compile_options(vitatanxga_recomp PRIVATE
+        "-include${BTGA_RECOMP_ROOT}/runtime_compat.h")
+      target_include_directories(vitatanxga_recomp PRIVATE
+        "${BTGA_RECOMP_DIR}"
+        "${BTGA_RECOMP_ROOT}/generated/include"
+        "${BTGA_RECOMP_INCLUDE}"
+        "${BTGA_LIBRECOMP}/include"
+        "${BTGA_ULTRAMODERN}/include"
+        "${BTGA_N64_RUNTIME_ROOT}/thirdparty"
+        "${BTGA_N64_RUNTIME_ROOT}/thirdparty/concurrentqueue"
+      )
+      target_link_libraries(vitatanxga_recomp PRIVATE
+        -Wl,--start-group
+        btga_vita_recomp_runtime
+        btga_recompiled_game_armv7
+        -Wl,--end-group
+        vitaGL
+        vitashark
+        SceShaccCgExt
+        mathneon
+        taihen_stub
+        pthread
+        SceCtrl_stub
+        SceAudio_stub
+        SceDisplay_stub
+        SceGxm_stub
+        SceCommonDialog_stub
+        SceAppMgr_stub
+        SceIofilemgr_stub
+        SceKernelDmacMgr_stub
+        SceShaccCg_stub
+        m
+      )
+      vita_create_self(vitatanxga_recomp.self vitatanxga_recomp)
+      vita_create_vpk(VitaTanxGA-recomp.vpk ${VITA_TITLEID}
+        vitatanxga_recomp.self VERSION ${VITA_VERSION} NAME ${VITA_APP_NAME})
+    endif()
   endif()
 endif()
 

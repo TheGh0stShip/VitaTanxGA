@@ -3,7 +3,7 @@ ROM ?= baseroms/us/baserom.z64
 VITA_ASSETS := assets/extracted/us/vita
 VITA_BUILD := port/vita/build
 
-.PHONY: all verify-rom runtime-test runtime-asset-test runtime-script-asset-test runtime-campaign-asset-test vita-assets vita vita-recomp-bootstrap vita-recomp-prepare vita-recomp-check vita-recomp-runtime-check vita-check clean
+.PHONY: all verify-rom runtime-test runtime-asset-test runtime-script-asset-test runtime-campaign-asset-test vita-assets vita vita-recomp-bootstrap vita-recomp-prepare vita-recomp-check vita-recomp-runtime-check vita-recomp-app vita-check clean
 
 all: vita-check
 
@@ -89,7 +89,7 @@ vita-recomp-bootstrap:
 port/recomp/generated/.prepared: port/recomp/btga.toml port/recomp/n_aspMain.toml \
 		port/recomp/runtime_compat.h port/recomp/prepare.sh \
 		config/vita/recomp_function_boundaries.toml \
-		tools/make_vita_recomp_header.py $(ROM)
+		tools/make_vita_recomp_header.py tools/rename_vita_recomp_symbols.py $(ROM)
 	port/recomp/prepare.sh
 	@touch $@
 
@@ -137,6 +137,20 @@ vita-recomp-runtime-check: vita-recomp-prepare
 			grep -q 'Tag_ABI_VFP_args: VFP registers' || exit 1; \
 	done
 	@echo "Compiled translated game, audio microcode, and Vita runtime services for ARMv7"
+
+vita-recomp-app: vita-recomp-prepare
+	@test -n "$(VITASDK)" || (echo "Set VITASDK to your VitaSDK installation" >&2; exit 2)
+	cmake -S port/vita -B $(VITA_BUILD)-full-recomp -DCMAKE_BUILD_TYPE=Release \
+		-DBTGA_BUILD_RECOMP=ON -DBTGA_BUILD_RECOMP_RUNTIME=ON \
+		-DBTGA_BUILD_FULL_RECOMP_APP=ON
+	cmake --build $(VITA_BUILD)-full-recomp --target VitaTanxGA-recomp.vpk-vpk
+	port/vita/verify_elf.sh $(VITA_BUILD)-full-recomp/vitatanxga_recomp \
+		$(VITASDK)/arm-vita-eabi/lib/libvitaGL.a \
+		$(VITASDK)/arm-vita-eabi/lib/libvitashark.a \
+		$(VITASDK)/arm-vita-eabi/lib/libmathneon.a
+	@unzip -l $(VITA_BUILD)-full-recomp/VitaTanxGA-recomp.vpk | \
+		grep -q 'eboot.bin' || exit 1
+	@echo "Built full translated-game VPK: $(VITA_BUILD)-full-recomp/VitaTanxGA-recomp.vpk"
 
 vita-check: runtime-test runtime-asset-test runtime-script-asset-test runtime-campaign-asset-test vita
 	port/vita/verify_elf.sh $(VITA_BUILD)/vitatanxga \

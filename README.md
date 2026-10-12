@@ -58,23 +58,24 @@ The repository currently produces an installable PS Vita VPK that:
   narrative with original 30 Hz waits on the portable runtime boundary;
 - validates the executable and code-bearing libraries for ABI consistency.
 
-The complete-game path also reproducibly translates the same 1,879-function
+The complete-game path reproducibly translates the same 1,879-function
 retail catalogue used by the playable PC port. All 35 generated C units compile
 with VitaSDK's ARMv7-A hard-float compiler. The translated audio microcode and
 the required N64 scheduler, message-queue, timer, controller, PI, AI, VI, SP,
 and DP service layers now compile in the same ARMv7 runtime target. The runtime
 uses a Vita-bounded 64 MiB guest allocation and a static indirect-call table;
-it does not require desktop live-recompiler or mod-patching machinery.
+it does not require desktop live-recompiler or mod-patching machinery. A second
+VPK target now links that translated game to Vita controls, threaded audio,
+Controller Pak persistence, and a live F3DEX 2.07 display-list renderer backed
+by vitaGL.
 Generated translation sources and ROM-derived binary data remain local and
 ignored. An ARM fallback implements the R4300's signed and unsigned 64x64-bit
 multiply results without assuming AArch64 or compiler `__int128` support.
 
-This is an **in-progress runtime port**, not yet the complete game. The full
-translated runtime is not yet the packaged executable: it still needs the
-Vita renderer callback that consumes the game's live N64 display lists and the
-final application/audio/input/save callbacks before it can replace the current
-portable gameplay executable. Music and frontend services are also still being
-ported from the recovered implementation.
+This remains an **in-progress runtime port** until the translated-game VPK has
+been exercised through the complete campaign and validated on physical Vita
+hardware. The older portable gameplay executable remains available as a
+development fallback; `VitaTanxGA-recomp.vpk` is the full-game port target.
 
 ## Windows Vita3K captures
 
@@ -137,13 +138,23 @@ The resulting package is:
 port/vita/build/vitatanxga.vpk
 ```
 
-The full translated-game ARM runtime gate is separate while its renderer and
-application callbacks are being integrated:
+Build the full translated-game application with:
 
 ```sh
 make vita-recomp-bootstrap
-make vita-recomp-runtime-check
+make vita-recomp-app
 ```
+
+The VPK does not distribute copyrighted ROM data. Before launching it, copy
+the verified USA Rev 0 big-endian ROM to:
+
+```text
+ux0:data/VitaTanxGA/baserom.z64
+```
+
+Controller Pak profiles are stored beside it as emulator-compatible `.mpk`
+images. Generated translation sources, the ROM, extracted resources, VPKs,
+and other build products remain ignored by Git.
 
 See [docs/VITA_PORT.md](docs/VITA_PORT.md) for architecture and packaging
 details.
