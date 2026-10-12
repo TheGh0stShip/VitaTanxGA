@@ -36,7 +36,7 @@ Fast3DMemoryBridge::Fast3DMemoryBridge(u8* rdram, u32 rdram_size)
       mTextureStages(nullptr), mTextureStageCount(0), mTextureStageCapacity(0),
       mBuildSerial(0), mTranslationFailed(false), mSawFullSync(false), mHaveTextureImage(false),
       mTextureImageW0(0), mTextureImageResolved(0), mTextureImageCommand(nullptr),
-      mTextureImageStaging(nullptr) {
+      mTextureImageStaging(nullptr), mSyncedColorImageFrame(0) {
     memset(mSegments, 0, sizeof(mSegments));
 }
 
@@ -207,6 +207,17 @@ bool Fast3DMemoryBridge::StageTextureImage(u32 requiredBytes, bool palette, u32 
     const u64 source64 = (u64)mTextureImageResolved + sourceOffset;
     if (source64 >= mRdramSize || requiredBytes > mRdramSize - (u32)source64) return false;
     const u32 sourceAddress = (u32)source64;
+
+    // N64 color images live in RDRAM and are sometimes consumed as textures
+    // by a later transition pass. The GPU backend does not otherwise update
+    // that guest allocation, so synchronize it on demand before staging.
+    // Limit this to one readback per frame; ordinary ROM/RDRAM textures never
+    // enter the readback path.
+    if (mInterpreter != nullptr && mSyncedColorImageFrame != mBuildSerial &&
+        mInterpreter->SyncColorImageToRdramIfReferenced(
+            mRdram, mRdramSize, sourceAddress, requiredBytes)) {
+        mSyncedColorImageFrame = mBuildSerial;
+    }
 
     TextureStage* stage = nullptr;
     for (u32 i = 0; i < mTextureStageCount; ++i) {

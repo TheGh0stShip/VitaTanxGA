@@ -90,4 +90,5 @@ private:
     u32 mTextureImageW0, mTextureImageResolved;
     void* mTextureImageCommand;
     u8* mTextureImageStaging;
+    u32 mSyncedColorImageFrame;
 };

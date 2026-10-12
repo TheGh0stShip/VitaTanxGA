@@ -457,6 +457,9 @@ class Interpreter {
     void RegisterFbTexture(const void* cpuAddr, int fbId);
     void UnregisterFbTexture(const void* cpuAddr);
     bool SyncColorImageToRdram(uint8_t* rdramBase, uint32_t rdramSize);
+    bool SyncColorImageToRdramIfReferenced(uint8_t* rdramBase, uint32_t rdramSize,
+                                           uint32_t textureAddress,
+                                           uint32_t textureSize);
     void SetRdramMemory(uint8_t* rdramBase, uint32_t rdramSize);
     void RegisterStagedTextureSource(const uint8_t* staged, uint32_t size, uint32_t rdramAddress);
     bool ResolveStagedTextureSource(const uint8_t* stagedAddress, uint32_t* rdramAddress) const;

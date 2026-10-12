@@ -5468,6 +5468,46 @@ bool Interpreter::SyncColorImageToRdram(uint8_t* rdramBase, uint32_t rdramSize) 
     return true;
 }
 
+bool Interpreter::SyncColorImageToRdramIfReferenced(uint8_t* rdramBase,
+                                                     uint32_t rdramSize,
+                                                     uint32_t textureAddress,
+                                                     uint32_t textureSize) {
+    if (rdramBase == nullptr || rdramSize == 0 || textureSize == 0 ||
+        mRdp->color_image_address == nullptr) {
+        return false;
+    }
+
+    const uintptr_t base = reinterpret_cast<uintptr_t>(rdramBase);
+    const uintptr_t rawColorAddress =
+        reinterpret_cast<uintptr_t>(mRdp->color_image_address);
+    uint32_t colorAddress;
+    if (rawColorAddress < rdramSize) {
+        colorAddress = static_cast<uint32_t>(rawColorAddress);
+    } else if (rawColorAddress >= base && rawColorAddress - base < rdramSize) {
+        colorAddress = static_cast<uint32_t>(rawColorAddress - base);
+    } else {
+        return false;
+    }
+
+    const uint32_t width = mRdp->color_image_width;
+    const uint32_t height = mNativeDimensions.height > 0.0f
+        ? static_cast<uint32_t>(mNativeDimensions.height + 0.5f)
+        : SCREEN_HEIGHT;
+    if (width == 0 || height == 0 ||
+        mRdp->color_image_format != G_IM_FMT_RGBA ||
+        mRdp->color_image_size != G_IM_SIZ_16b) {
+        return false;
+    }
+
+    const uint64_t colorEnd = static_cast<uint64_t>(colorAddress) +
+                              static_cast<uint64_t>(width) * height * 2u;
+    const uint64_t textureEnd = static_cast<uint64_t>(textureAddress) +
+                                textureSize;
+    if (textureEnd <= colorAddress || colorEnd <= textureAddress) return false;
+
+    return SyncColorImageToRdram(rdramBase, rdramSize);
+}
+
 void Interpreter::GetDimensions(uint32_t* width, uint32_t* height, int32_t* posX, int32_t* posY) {
     mWapi->GetDimensions(width, height, posX, posY);
 }
