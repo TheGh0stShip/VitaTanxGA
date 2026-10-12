@@ -81,7 +81,9 @@ set(VITA_GAME_FILES
   "${VITA_ASSET_ROOT}/gameplay/projectile_0.i8"
   "${VITA_ASSET_ROOT}/gameplay/projectile_1.i8"
   "${VITA_ASSET_ROOT}/gameplay/projectile_2.i8"
-  "${VITA_ASSET_ROOT}/audio/cannon.pcm16le"
+  "${VITA_ASSET_ROOT}/audio/sfx_bank.pcm16le"
+  "${VITA_ASSET_ROOT}/audio/sfx_index.bin"
+  "${VITA_ASSET_ROOT}/audio/effect_wave_map.bin"
   "${VITA_ASSET_ROOT}/campaign/campaign_text.bin"
   "${VITA_ASSET_ROOT}/campaign/campaign_config.bin"
 )

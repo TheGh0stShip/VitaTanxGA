@@ -20,6 +20,12 @@ static void configure_mission(BtgaRuntime *runtime) {
         btga_runtime_set_world_bounds(runtime, bounds.min_x, bounds.min_z,
                                       bounds.max_x, bounds.max_z);
     btga_runtime_set_terrain(runtime, vita_platform_terrain());
+    {
+        size_t collision_count = 0;
+        const BtgaWorldCollision *collisions =
+            vita_platform_collisions(&collision_count);
+        btga_runtime_set_collisions(runtime, collisions, collision_count);
+    }
     if (vita_platform_spawn(0, 0, &spawn))
         btga_runtime_set_player_spawn(runtime, spawn.x, spawn.y, spawn.z,
                                       spawn.yaw);

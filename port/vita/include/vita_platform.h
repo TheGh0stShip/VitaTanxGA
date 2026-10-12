@@ -28,6 +28,7 @@ bool vita_platform_assets_ready(void);
 const BtgaWorldSummary *vita_platform_world_summary(void);
 bool vita_platform_world_bounds(BtgaWorldBounds *bounds);
 const BtgaTerrain *vita_platform_terrain(void);
+const BtgaWorldCollision *vita_platform_collisions(size_t *count);
 bool vita_platform_spawn(uint8_t row, uint8_t column, BtgaWorldSpawn *spawn);
 bool vita_platform_mission_config(BtgaMissionConfig *config);
 bool vita_platform_pickup(size_t index, BtgaWorldPickup *pickup);

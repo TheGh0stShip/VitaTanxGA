@@ -16,15 +16,16 @@ The repository currently produces an installable PS Vita VPK that:
 - renders perspective world geometry with the original vertex UVs, decoded
   N64 textures, recovered tile origins and coordinate shifts,
   wrap/mirror/clamp sampling, material colors, separate opaque/alpha depth
-  handling, placements, depth testing, and yaw transforms;
+  handling, placements, depth testing, yaw transforms, and recovered rotated
+  mode-1/mode-2 blocking volumes for tank collision;
 - provides title, gameplay, and pause states with controllable tank movement,
   turret aiming, cooldown-limited held-trigger firing, ammunition, projectiles
   rendered with the recovered
   transparent N64 intensity sprite, retail pickup-to-weapon inventory mapping,
   secondary fire, weapon cycling, shields, and a following camera;
-- resolves the retail M1A1 cannon effect to libmus SFX wave 3, decodes its
-  N64 ADPCM predictor stream during asset extraction, and plays the compact
-  PCM result through a dedicated Vita audio thread when a shot is created;
+- decodes the complete 76-wave retail libmus SFX bank from N64 ADPCM/raw16
+  into a compact indexed PCM bank and routes recovered weapon effect IDs
+  through a dedicated Vita audio thread;
 - resolves and renders the player's original tank asset through the recovered
   shared model-ID table, including body, turret, treads, and detail layers;
 - maps all 19 campaign records through the recovered retail asset dispatcher,
@@ -43,7 +44,7 @@ The repository currently produces an installable PS Vita VPK that:
 - derives navigation heights from the placed retail level geometry;
 - loads and validates extracted big-endian world component tables;
 - packages the campaign worlds, shared world pools, projectile
-  sprites, the decoded cannon effect, mission scripts, and original campaign
+  sprites, the decoded SFX bank, mission scripts, and original campaign
   text/configuration tables;
 - presents the recovered San Francisco Airport location, objective, and full
   mission briefing between the opening narrative and deployment;

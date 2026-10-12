@@ -90,18 +90,19 @@ int main(void) {
     assert(btga_runtime_active_pickups(&runtime) == 0);
     assert(runtime.last_pickup_kind == 4 && runtime.pickup_message_ticks != 0);
     assert(runtime.projectiles[0].active);
-    assert(runtime.cannon_sound_serial == 1);
+    assert(runtime.sound_serial == 1 && runtime.sound_effect == 3);
     input.pressed = 0;
     btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US * 4);
     btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US * 4);
     assert(runtime.player.ammo == 99);
-    assert(runtime.cannon_sound_serial == 2);
+    assert(runtime.sound_serial == 2 && runtime.sound_effect == 3);
 
     input = (BtgaInput){.held = BTGA_BUTTON_ALT_FIRE,
                         .pressed = BTGA_BUTTON_ALT_FIRE};
     btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US);
     assert(runtime.weapon_ammo[2] == 4);
     assert(runtime.player.secondary_cooldown != 0);
+    assert(runtime.sound_effect == 0x14);
     {
         unsigned int swarmer_count = 0;
         for (index = 0; index < BTGA_MAX_PROJECTILES; index++)
@@ -112,6 +113,21 @@ int main(void) {
     input = (BtgaInput){.pressed = BTGA_BUTTON_SELECT};
     btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US);
     assert(runtime.player.selected_weapon == 16);
+
+    {
+        BtgaWorldCollision collision = {
+            (int16_t)runtime.player.x, (int16_t)runtime.player.y,
+            (int16_t)runtime.player.z, 0,
+            -100, -100, -100, 100, 100, 100,
+        };
+        float blocked_x = runtime.player.x;
+        float blocked_z = runtime.player.z;
+        btga_runtime_set_collisions(&runtime, &collision, 1);
+        input = (BtgaInput){.move_y = -32768};
+        btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US);
+        assert(runtime.player.x == blocked_x && runtime.player.z == blocked_z);
+        btga_runtime_set_collisions(&runtime, NULL, 0);
+    }
 
     input = (BtgaInput){.pressed = BTGA_BUTTON_START};
     btga_runtime_update(&runtime, &input, 0);

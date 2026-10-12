@@ -45,7 +45,13 @@ commands, including N64 tile origins, coordinate shifts, and sampling modes;
 uploads native Vita textures; applies recovered material and distance
 modulation; and separates alpha surfaces from opaque depth writes. The full
 6,303-triangle placed scene is rendered with a 37-degree perspective camera
-and GXM depth testing. Portable gameplay state currently covers tank movement,
+and GXM depth testing.
+The actor-world loader also distinguishes the retail entry-30 navigation/event
+modes from its mode-1/mode-2 blocking volumes. Those signed big-endian local
+bounds retain their placement yaw and stop player/AI tanks without globally
+packing or casting the recovered records.
+
+Portable gameplay state currently covers tank movement,
 terrain following, turret aim, primary and recovered per-class secondary fire,
 retail weapon-slot inventory and cooldowns, shields, homing and area-damage
 projectiles, turbo, cloaking, ammunition, recovered per-mission rosters,
@@ -71,12 +77,13 @@ shields, bouncing betties, flamethrower, cloaking, grenades, tank bucks, and
 radar. Collected models leave the scene, HUD feedback names the item, and a
 mission restart restores the full placement set and clears its inventory.
 
-The asset pipeline resolves the M1A1's retail cannon sound ID 3 through the
-libmus effect bytecode to SFX wave 3 and decodes its order-2 N64 ADPCM stream
-with the stored predictor book. Only the resulting 20,896-sample mono PCM
-effect is packaged. A dedicated Vita audio thread resamples the original
-22,050 Hz mix rate to the hardware's 48 kHz stereo output and restarts the
-effect only when simulation state reports a successfully created cannon shot.
+The asset pipeline resolves all 93 retail libmus effect programs to the
+complete 76-wave SFX sample bank and decodes its N64 ADPCM/raw16 data with the
+stored predictor books. A verified little-endian PCM bank, fixed-width wave
+index, and effect-to-wave map are packaged instead of the raw libmus files.
+A dedicated Vita audio thread resamples the original 22,050 Hz mix rate to the
+hardware's 48 kHz stereo output and consumes recovered weapon effect events.
+The M1A1 cannon remains corpus-checked as effect 3, wave 3, with 20,896 samples.
 
 All 19 campaign records are selectable from the title screen. Their track IDs
 are translated through the recovered single-player asset dispatcher to the

@@ -178,3 +178,38 @@ bool btga_world_pickups(const BtgaWorldComponents *c, BtgaWorldPickup *pickups,
     *pickup_count = count;
     return true;
 }
+
+bool btga_world_collisions(const BtgaWorldComponents *c,
+                           BtgaWorldCollision *collisions, size_t capacity,
+                           size_t *collision_count) {
+    BtgaWorldSummary summary;
+    uint32_t index;
+    size_t count = 0;
+    if (collision_count == NULL || (capacity != 0 && collisions == NULL) ||
+        !btga_world_validate(c, &summary)) return false;
+    for (index = 0; index < summary.placement_count; index++) {
+        const uint8_t *placement = c->placements + index * BTGA_PLACEMENT_SIZE;
+        uint32_t offset = btga_read_be_u32(placement + 8);
+        const uint8_t *definition;
+        if (offset > c->definitions_size ||
+            c->definitions_size - offset < 14) continue;
+        definition = c->definitions + offset;
+        if (definition[0] != 30 ||
+            (definition[1] != 1 && definition[1] != 2)) continue;
+        if (count >= capacity) return false;
+        collisions[count++] = (BtgaWorldCollision){
+            (int16_t)read_be_u16(placement),
+            (int16_t)read_be_u16(placement + 2),
+            (int16_t)read_be_u16(placement + 4),
+            read_be_u16(placement + 6),
+            (int16_t)read_be_u16(definition + 2),
+            (int16_t)read_be_u16(definition + 4),
+            (int16_t)read_be_u16(definition + 6),
+            (int16_t)read_be_u16(definition + 8),
+            (int16_t)read_be_u16(definition + 10),
+            (int16_t)read_be_u16(definition + 12),
+        };
+    }
+    *collision_count = count;
+    return true;
+}

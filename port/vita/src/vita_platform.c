@@ -49,7 +49,9 @@ static LoadedFile s_world_files[7];
 static LoadedFile s_common_files[7];
 static LoadedFile s_spawn_files[7];
 static LoadedFile s_gameplay_data;
-static LoadedFile s_cannon_pcm;
+static LoadedFile s_sfx_pcm;
+static LoadedFile s_sfx_index;
+static LoadedFile s_effect_wave_map;
 static LoadedFile s_geometry_pool;
 static LoadedFile s_state_pool;
 static LoadedFile s_texture_pool;
@@ -65,6 +67,9 @@ enum { kMaximumPickups = BTGA_MAX_PICKUPS };
 static BtgaWorldPickup s_pickups[kMaximumPickups];
 static uint16_t s_pickup_model_indices[kMaximumPickups];
 static size_t s_pickup_count;
+enum { kMaximumCollisions = 128 };
+static BtgaWorldCollision s_collisions[kMaximumCollisions];
+static size_t s_collision_count;
 
 enum { kMaximumProjectedTriangles = 8192, kMaximumTextureCache = 256 };
 
@@ -124,11 +129,12 @@ static SceUID s_audio_thread = -1;
 static int s_audio_port = -1;
 static volatile bool s_audio_stop;
 static volatile uint32_t s_audio_request_serial;
+static volatile uint8_t s_audio_request_effect;
 
 enum {
     kAudioFrames = 1024,
     kAudioOutputRate = 48000,
-    kCannonSampleRate = 22050,
+    kSfxSampleRate = 22050,
 };
 
 static uint32_t save_checksum(const uint8_t *data, size_t size) {
@@ -146,6 +152,11 @@ static void write_be_u32(uint8_t *destination, uint32_t value) {
     destination[1] = (uint8_t)(value >> 16);
     destination[2] = (uint8_t)(value >> 8);
     destination[3] = (uint8_t)value;
+}
+
+static uint32_t read_le_u32(const uint8_t *source) {
+    return (uint32_t)source[0] | ((uint32_t)source[1] << 8) |
+           ((uint32_t)source[2] << 16) | ((uint32_t)source[3] << 24);
 }
 
 static void load_progress(void) {
@@ -331,8 +342,9 @@ static int audio_thread_entry(SceSize args, void *argument) {
     uint32_t observed_serial = 0;
     uint32_t source_position = 0;
     const uint32_t source_step =
-        (uint32_t)(((uint64_t)kCannonSampleRate << 16) / kAudioOutputRate);
-    const uint32_t sample_count = (uint32_t)(s_cannon_pcm.size / 2u);
+        (uint32_t)(((uint64_t)kSfxSampleRate << 16) / kAudioOutputRate);
+    uint32_t sample_start = 0;
+    uint32_t sample_count = 0;
     bool playing = false;
     (void)args;
     (void)argument;
@@ -340,15 +352,27 @@ static int audio_thread_entry(SceSize args, void *argument) {
         unsigned int frame;
         uint32_t requested = s_audio_request_serial;
         if (requested != observed_serial) {
+            uint8_t effect = s_audio_request_effect;
             observed_serial = requested;
             source_position = 0;
-            playing = true;
+            playing = false;
+            if (effect < s_effect_wave_map.size) {
+                uint8_t wave = s_effect_wave_map.data[effect];
+                size_t record = (size_t)wave * 8u;
+                if (wave != 0xFF && record + 8u <= s_sfx_index.size) {
+                    sample_start = read_le_u32(s_sfx_index.data + record);
+                    sample_count = read_le_u32(s_sfx_index.data + record + 4u);
+                    playing = sample_start <= s_sfx_pcm.size / 2u &&
+                        sample_count <= s_sfx_pcm.size / 2u - sample_start;
+                }
+            }
         }
         for (frame = 0; frame < kAudioFrames; frame++) {
             int16_t sample = 0;
             uint32_t source_index = source_position >> 16;
             if (playing && source_index < sample_count) {
-                const uint8_t *source = s_cannon_pcm.data + source_index * 2u;
+                const uint8_t *source = s_sfx_pcm.data +
+                    (sample_start + source_index) * 2u;
                 sample = (int16_t)((uint16_t)source[0] |
                                    ((uint16_t)source[1] << 8));
                 source_position += source_step;
@@ -365,18 +389,24 @@ static int audio_thread_entry(SceSize args, void *argument) {
 
 static bool audio_start(void) {
     int volume[2] = {0x6000, 0x6000};
-    if (!load_file("app0:assets/audio/cannon.pcm16le", &s_cannon_pcm) ||
-        (s_cannon_pcm.size & 1u) != 0 || s_cannon_pcm.size > UINT32_MAX) {
-        free(s_cannon_pcm.data);
-        s_cannon_pcm = (LoadedFile){0};
+    if (!load_file("app0:assets/audio/sfx_bank.pcm16le", &s_sfx_pcm) ||
+        !load_file("app0:assets/audio/sfx_index.bin", &s_sfx_index) ||
+        !load_file("app0:assets/audio/effect_wave_map.bin",
+                   &s_effect_wave_map) ||
+        (s_sfx_pcm.size & 1u) != 0 || s_sfx_pcm.size > UINT32_MAX ||
+        s_sfx_index.size != 76u * 8u || s_effect_wave_map.size != 93u) {
+        free(s_sfx_pcm.data); s_sfx_pcm = (LoadedFile){0};
+        free(s_sfx_index.data); s_sfx_index = (LoadedFile){0};
+        free(s_effect_wave_map.data); s_effect_wave_map = (LoadedFile){0};
         return false;
     }
     s_audio_port = sceAudioOutOpenPort(SCE_AUDIO_OUT_PORT_TYPE_MAIN,
                                        kAudioFrames, kAudioOutputRate,
                                        SCE_AUDIO_OUT_MODE_STEREO);
     if (s_audio_port < 0) {
-        free(s_cannon_pcm.data);
-        s_cannon_pcm = (LoadedFile){0};
+        free(s_sfx_pcm.data); s_sfx_pcm = (LoadedFile){0};
+        free(s_sfx_index.data); s_sfx_index = (LoadedFile){0};
+        free(s_effect_wave_map.data); s_effect_wave_map = (LoadedFile){0};
         return false;
     }
     sceAudioOutSetVolume(s_audio_port,
@@ -385,6 +415,7 @@ static bool audio_start(void) {
                          volume);
     s_audio_stop = false;
     s_audio_request_serial = 0;
+    s_audio_request_effect = 0;
     s_audio_thread = sceKernelCreateThread("vitatanxga_audio",
                                            audio_thread_entry, 0x10000100,
                                            0x10000, 0, 0, NULL);
@@ -394,8 +425,9 @@ static bool audio_start(void) {
         s_audio_thread = -1;
         sceAudioOutReleasePort(s_audio_port);
         s_audio_port = -1;
-        free(s_cannon_pcm.data);
-        s_cannon_pcm = (LoadedFile){0};
+        free(s_sfx_pcm.data); s_sfx_pcm = (LoadedFile){0};
+        free(s_sfx_index.data); s_sfx_index = (LoadedFile){0};
+        free(s_effect_wave_map.data); s_effect_wave_map = (LoadedFile){0};
         return false;
     }
     return true;
@@ -413,8 +445,9 @@ static void audio_stop(void) {
         sceAudioOutReleasePort(s_audio_port);
         s_audio_port = -1;
     }
-    free(s_cannon_pcm.data);
-    s_cannon_pcm = (LoadedFile){0};
+    free(s_sfx_pcm.data); s_sfx_pcm = (LoadedFile){0};
+    free(s_sfx_index.data); s_sfx_index = (LoadedFile){0};
+    free(s_effect_wave_map.data); s_effect_wave_map = (LoadedFile){0};
 }
 
 static bool load_projectile_textures(void) {
@@ -607,6 +640,17 @@ static bool load_mission_world(uint8_t mission) {
         }
         valid = valid && btga_world_pickups(&s_spawn_components, s_pickups,
                                             kMaximumPickups, &s_pickup_count);
+        if (valid) {
+            size_t world_collision_count = 0;
+            size_t spawn_collision_count = 0;
+            valid = btga_world_collisions(&s_world_components, s_collisions,
+                        kMaximumCollisions, &world_collision_count) &&
+                    btga_world_collisions(&s_spawn_components,
+                        s_collisions + world_collision_count,
+                        kMaximumCollisions - world_collision_count,
+                        &spawn_collision_count);
+            s_collision_count = world_collision_count + spawn_collision_count;
+        }
         for (index = 0; valid && index < s_pickup_count; index++) {
             uint16_t model_id;
             if (s_pickups[index].kind == 20) {
@@ -1062,6 +1106,7 @@ bool vita_platform_load_mission(uint8_t mission) {
     free(s_gameplay_data.data); s_gameplay_data = (LoadedFile){0};
     free(s_campaign_config_file.data); s_campaign_config_file = (LoadedFile){0};
     s_pickup_count = 0;
+    s_collision_count = 0;
     s_world_ready = load_mission_world(mission) && load_campaign_text(mission);
     return s_world_ready;
 }
@@ -1093,6 +1138,12 @@ bool vita_platform_world_bounds(BtgaWorldBounds *bounds) {
 
 const BtgaTerrain *vita_platform_terrain(void) {
     return s_world_ready ? &s_terrain : NULL;
+}
+
+const BtgaWorldCollision *vita_platform_collisions(size_t *count) {
+    if (!s_world_ready || count == NULL) return NULL;
+    *count = s_collision_count;
+    return s_collisions;
 }
 
 bool vita_platform_spawn(uint8_t row, uint8_t column, BtgaWorldSpawn *spawn) {
@@ -1220,7 +1271,8 @@ void vita_platform_begin_frame(void) {
 
 void vita_platform_draw(const BtgaRuntime *runtime) {
     const BtgaWorldSummary *world = vita_platform_world_summary();
-    s_audio_request_serial = runtime->cannon_sound_serial;
+    s_audio_request_effect = runtime->sound_effect;
+    s_audio_request_serial = runtime->sound_serial;
     vita2d_draw_rectangle(0, 0, 960, 544, kColorBlack);
     vita2d_draw_rectangle(54, 112, 8, 270, kColorOrange);
     if ((runtime->screen == BTGA_SCREEN_GAMEPLAY ||

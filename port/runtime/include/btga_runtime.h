@@ -7,6 +7,7 @@
 #include "btga_view.h"
 #include "btga_terrain.h"
 #include "btga_script.h"
+#include "btga_world.h"
 
 enum BtgaButton {
     BTGA_BUTTON_CONFIRM = 1u << 0,
@@ -67,7 +68,9 @@ typedef struct BtgaProjectile {
     float y;
     float z;
     float velocity_x;
+    float velocity_y;
     float velocity_z;
+    float gravity;
     uint16_t lifetime;
     uint16_t damage;
     uint16_t blast_radius;
@@ -110,7 +113,7 @@ enum {
 
 typedef struct BtgaRuntime {
     uint64_t simulation_ticks;
-    uint32_t cannon_sound_serial;
+    uint32_t sound_serial;
     uint32_t accumulator_us;
     uint32_t pending_pressed;
     BtgaCamera camera;
@@ -122,7 +125,10 @@ typedef struct BtgaRuntime {
     uint8_t pickup_count;
     uint8_t last_pickup_kind;
     uint16_t pickup_message_ticks;
+    uint8_t sound_effect;
     const BtgaTerrain *terrain;
+    const BtgaWorldCollision *collisions;
+    size_t collision_count;
     float world_min_x;
     float world_min_z;
     float world_max_x;
@@ -147,6 +153,9 @@ void btga_runtime_init(BtgaRuntime *runtime, bool assets_ready);
 void btga_runtime_set_world_bounds(BtgaRuntime *runtime, float min_x, float min_z,
                                    float max_x, float max_z);
 void btga_runtime_set_terrain(BtgaRuntime *runtime, const BtgaTerrain *terrain);
+void btga_runtime_set_collisions(BtgaRuntime *runtime,
+                                 const BtgaWorldCollision *collisions,
+                                 size_t collision_count);
 void btga_runtime_set_player_spawn(BtgaRuntime *runtime, float x, float y,
                                    float z, uint16_t yaw);
 bool btga_runtime_add_enemy(BtgaRuntime *runtime, float x, float y, float z,

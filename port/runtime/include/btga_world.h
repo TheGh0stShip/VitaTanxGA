@@ -43,6 +43,13 @@ typedef struct BtgaWorldPickup {
     uint8_t kind;
 } BtgaWorldPickup;
 
+typedef struct BtgaWorldCollision {
+    int16_t x, y, z;
+    uint16_t yaw;
+    int16_t min_x, min_y, min_z;
+    int16_t max_x, max_y, max_z;
+} BtgaWorldCollision;
+
 bool btga_world_validate(const BtgaWorldComponents *components,
                          BtgaWorldSummary *summary);
 uint32_t btga_read_be_u32(const uint8_t bytes[4]);
@@ -55,5 +62,8 @@ bool btga_world_find_spawn(const BtgaWorldComponents *components,
 bool btga_world_pickups(const BtgaWorldComponents *components,
                         BtgaWorldPickup *pickups, size_t capacity,
                         size_t *pickup_count);
+bool btga_world_collisions(const BtgaWorldComponents *components,
+                           BtgaWorldCollision *collisions, size_t capacity,
+                           size_t *collision_count);
 
 #endif
