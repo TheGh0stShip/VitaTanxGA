@@ -29,6 +29,25 @@ extern "C" {
     void vglBufferData(GLenum target, const GLvoid *data);
 };
 #define SHADER_MAGIC (1)
+
+static bool ValidVitaProgramBinary(const void* data, size_t size) {
+    constexpr size_t kAttributeCount = 16;
+    constexpr size_t kHeaderSize = sizeof(GLuint) +
+        sizeof(SceGxmVertexAttribute) * kAttributeCount;
+    if (data == nullptr || size < kHeaderSize + sizeof(uint32_t) * 2) return false;
+
+    const uint8_t* bytes = static_cast<const uint8_t*>(data);
+    uint32_t vertexSize = 0;
+    memcpy(&vertexSize, bytes + kHeaderSize, sizeof(vertexSize));
+    if (vertexSize > size - kHeaderSize - sizeof(vertexSize)) return false;
+    const size_t fragmentSizeOffset = kHeaderSize + sizeof(vertexSize) + vertexSize;
+    if (fragmentSizeOffset > size - sizeof(uint32_t)) return false;
+
+    uint32_t fragmentSize = 0;
+    memcpy(&fragmentSize, bytes + fragmentSizeOffset, sizeof(fragmentSize));
+    return fragmentSize <= size - fragmentSizeOffset - sizeof(fragmentSize) &&
+           fragmentSizeOffset + sizeof(fragmentSize) + fragmentSize == size;
+}
 #endif
 
 #ifdef __vita__
@@ -505,7 +524,8 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
             const size_t binary_size = (size_t)file_size - sizeof(size_t);
             prog_bin = malloc(binary_size);
             if (prog_bin && fread(&num_floats, 1, sizeof(size_t), f) == sizeof(size_t) &&
-                fread(prog_bin, 1, binary_size, f) == binary_size) {
+                fread(prog_bin, 1, binary_size, f) == binary_size &&
+                ValidVitaProgramBinary(prog_bin, binary_size)) {
                 shader_program = glCreateProgram();
                 glProgramBinary(shader_program, 0, prog_bin, binary_size);
                 glGetProgramiv(shader_program, GL_LINK_STATUS, &success);
@@ -557,19 +577,31 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
         glDeleteShader(vertex_shader);
         glDeleteShader(fragment_shader);
 
-        f = fopen(fname, "wb");
-        if (f) {
-            glGetProgramiv(shader_program, GL_PROGRAM_BINARY_LENGTH, &prog_size);
-            prog_bin = prog_size > 0 ? malloc(prog_size) : nullptr;
-            if (prog_bin) {
-                glGetProgramBinary(shader_program, prog_size, &prog_len, &prog_format, prog_bin);
-                fwrite(&num_floats, 1, sizeof(size_t), f);
-                fwrite(prog_bin, 1, prog_len, f);
+        glGetProgramiv(shader_program, GL_PROGRAM_BINARY_LENGTH, &prog_size);
+        prog_bin = prog_size > 0 ? malloc(prog_size) : nullptr;
+        if (prog_bin) {
+            glGetProgramBinary(shader_program, prog_size, &prog_len, &prog_format, prog_bin);
+            if (prog_len > 0 && prog_len <= prog_size &&
+                ValidVitaProgramBinary(prog_bin, static_cast<size_t>(prog_len))) {
+                char temporary[272];
+                snprintf(temporary, sizeof(temporary), "%s.tmp", fname);
+                remove(temporary);
+                f = fopen(temporary, "wb");
+                const bool written = f != nullptr &&
+                    fwrite(&num_floats, 1, sizeof(size_t), f) == sizeof(size_t) &&
+                    fwrite(prog_bin, 1, prog_len, f) == static_cast<size_t>(prog_len) &&
+                    fflush(f) == 0;
+                if (f != nullptr) fclose(f);
+                if (written) {
+                    remove(fname);
+                    if (rename(temporary, fname) != 0) remove(temporary);
+                } else {
+                    remove(temporary);
+                }
             }
-            fclose(f);
-            free(prog_bin);
-            prog_bin = nullptr;
         }
+        free(prog_bin);
+        prog_bin = nullptr;
     }
 
 program_ready:
