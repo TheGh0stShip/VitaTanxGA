@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include <map>
+#include <string>
 #include <unordered_map>
 
 #ifndef _LANGUAGE_C
@@ -47,6 +48,22 @@ static bool ValidVitaProgramBinary(const void* data, size_t size) {
     memcpy(&fragmentSize, bytes + fragmentSizeOffset, sizeof(fragmentSize));
     return fragmentSize <= size - fragmentSizeOffset - sizeof(fragmentSize) &&
            fragmentSizeOffset + sizeof(fragmentSize) + fragmentSize == size;
+}
+
+static uint32_t VitaShaderSourceHash(const std::string& vertex,
+                                     const std::string& fragment) {
+    uint32_t hash = 2166136261u;
+    const auto append = [&hash](const std::string& source) {
+        for (unsigned char byte : source) {
+            hash = (hash ^ byte) * 16777619u;
+        }
+        // Keep the two sources distinct even if their concatenated bytes
+        // happen to be identical to another pair.
+        hash = (hash ^ 0xFFu) * 16777619u;
+    };
+    append(vertex);
+    append(fragment);
+    return hash;
 }
 #endif
 
@@ -537,7 +554,10 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
     unsigned int prog_format = 0;
     void* prog_bin = nullptr;
     char fname[256];
-    sprintf(fname, "ux0:data/VitaTanxGA/shader_cache/%016llX_%016llX_%d.bin", shader_id1, shader_id0, SHADER_MAGIC);
+    const uint32_t source_hash = VitaShaderSourceHash(vs_buf, fs_buf);
+    sprintf(fname,
+            "ux0:data/VitaTanxGA/shader_cache/%016llX_%016llX_%d_%08X.bin",
+            shader_id1, shader_id0, SHADER_MAGIC, source_hash);
     FILE* f = fopen(fname, "rb");
     if (f) {
         fseek(f, 0, SEEK_END);
