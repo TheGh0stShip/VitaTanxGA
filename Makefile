@@ -13,10 +13,12 @@ verify-rom:
 runtime-test:
 	$(CC) -std=c11 -Wall -Wextra -Werror -Wpedantic \
 		-Iport/runtime/include port/runtime/src/btga_runtime.c \
+		port/runtime/src/btga_tank.c \
 		port/runtime/src/btga_world.c port/runtime/src/btga_geometry.c \
 		port/runtime/src/btga_scene.c port/runtime/src/btga_view.c \
 		port/runtime/src/btga_terrain.c port/runtime/src/btga_material.c \
 		port/runtime/src/btga_texture.c \
+		port/runtime/tests/tank_test.c \
 		port/runtime/tests/runtime_test.c port/runtime/tests/world_test.c \
 		port/runtime/tests/geometry_test.c port/runtime/tests/view_test.c \
 		port/runtime/tests/material_test.c \
@@ -43,6 +45,7 @@ vita-assets: verify-rom
 	$(PYTHON) tools/inventory_lzari_assets.py --rom $(ROM) --output $(VITA_ASSETS)/lzari_manifest.json --extract-dir $(VITA_ASSETS)/lzari --split-bundles
 	$(PYTHON) tools/extract_lzari_images.py $(VITA_ASSETS)/images --rom $(ROM)
 	$(PYTHON) tools/extract_lzari_worlds.py $(VITA_ASSETS)/worlds --rom $(ROM)
+	$(PYTHON) tools/extract_gameplay_data.py $(VITA_ASSETS)/gameplay --rom $(ROM)
 	$(PYTHON) tools/inventory_script_assets.py --rom $(ROM) --output $(VITA_ASSETS)/scripts_manifest.json --extract-dir $(VITA_ASSETS)/scripts
 	$(PYTHON) tools/inventory_libmus_assets.py --rom $(ROM) --output $(VITA_ASSETS)/libmus_manifest.json --extract-dir $(VITA_ASSETS)/libmus
 

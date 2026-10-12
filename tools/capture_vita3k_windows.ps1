@@ -119,6 +119,8 @@ try {
 
     Start-Sleep -Seconds 3
     $titlePath = Join-Path $OutputDirectory 'vita3k-title.png'
+    [void][VitaTanxWindow]::SetForegroundWindow($window)
+    Start-Sleep -Milliseconds 500
     Capture-Client $window $titlePath
 
     [void][VitaTanxWindow]::SetForegroundWindow($window)
@@ -126,6 +128,8 @@ try {
     [System.Windows.Forms.SendKeys]::SendWait('x')
     Start-Sleep -Seconds 12
     $gameplayPath = Join-Path $OutputDirectory 'vita3k-gameplay.png'
+    [void][VitaTanxWindow]::SetForegroundWindow($window)
+    Start-Sleep -Milliseconds 500
     Capture-Client $window $gameplayPath
 
     Write-Output $titlePath

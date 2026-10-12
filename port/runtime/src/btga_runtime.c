@@ -15,16 +15,17 @@ static float clampf(float value, float minimum, float maximum) {
 }
 
 static void spawn_projectile(BtgaRuntime *runtime) {
+    float heading = runtime->player.yaw + runtime->player.turret_yaw;
     unsigned int index;
     if (runtime->player.ammo == 0 || runtime->player.fire_cooldown != 0) return;
     for (index = 0; index < BTGA_MAX_PROJECTILES; index++) {
         BtgaProjectile *projectile = &runtime->projectiles[index];
         if (projectile->active) continue;
-        projectile->x = runtime->player.x + sinf(runtime->player.turret_yaw) * 55.0f;
+        projectile->x = runtime->player.x + sinf(heading) * 55.0f;
         projectile->y = runtime->player.y + 35.0f;
-        projectile->z = runtime->player.z + cosf(runtime->player.turret_yaw) * 55.0f;
-        projectile->velocity_x = sinf(runtime->player.turret_yaw) * 95.0f;
-        projectile->velocity_z = cosf(runtime->player.turret_yaw) * 95.0f;
+        projectile->z = runtime->player.z + cosf(heading) * 55.0f;
+        projectile->velocity_x = sinf(heading) * 95.0f;
+        projectile->velocity_z = cosf(heading) * 95.0f;
         projectile->lifetime = 75;
         projectile->active = true;
         runtime->player.ammo--;
@@ -82,8 +83,27 @@ void btga_runtime_set_terrain(BtgaRuntime *runtime, const BtgaTerrain *terrain) 
     if (runtime == NULL) return;
     runtime->terrain = terrain;
     if (terrain != NULL && btga_terrain_height(terrain, runtime->player.x,
-                                               runtime->player.z, &height))
+                                               runtime->player.z, &height)) {
+        runtime->camera.y += height - runtime->player.y;
         runtime->player.y = height;
+    }
+}
+
+void btga_runtime_set_player_spawn(BtgaRuntime *runtime, float x, float y,
+                                   float z, uint16_t yaw) {
+    float heading;
+    if (runtime == NULL) return;
+    heading = (float)yaw * (6.28318530718f / 65536.0f);
+    runtime->player.x = x;
+    runtime->player.y = y;
+    runtime->player.z = z;
+    runtime->player.yaw = heading;
+    runtime->player.turret_yaw = 0.0f;
+    runtime->camera.x = x - sinf(heading) * 720.0f;
+    runtime->camera.y = y + 430.0f;
+    runtime->camera.z = z - cosf(heading) * 720.0f;
+    runtime->camera.yaw = heading;
+    runtime->camera.pitch = -0.32f;
 }
 
 void btga_runtime_init(BtgaRuntime *runtime, bool assets_ready) {

@@ -12,6 +12,8 @@ typedef struct BtgaTextureInfo {
     uint16_t height;
     uint8_t format_id;
     uint8_t size_id;
+    uint8_t u_address_mode;
+    uint8_t v_address_mode;
     bool has_palette;
 } BtgaTextureInfo;
 

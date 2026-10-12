@@ -7,6 +7,7 @@ int btga_geometry_tests(void);
 int btga_view_tests(void);
 int btga_material_tests(void);
 int btga_texture_tests(void);
+int btga_tank_tests(void);
 
 int main(void) {
     BtgaRuntime runtime;
@@ -45,5 +46,6 @@ int main(void) {
     btga_view_tests();
     btga_material_tests();
     btga_texture_tests();
+    btga_tank_tests();
     return 0;
 }

@@ -71,6 +71,7 @@ bool btga_texture_describe(const uint8_t *texture_chunk, size_t texture_size,
     size_t state_count = 0;
     size_t index;
     uint32_t tile_w0 = 0;
+    uint32_t tile_w1 = 0;
     uint32_t size_w1 = 0;
     uint32_t images[16];
     unsigned int image_count = 0;
@@ -88,6 +89,7 @@ bool btga_texture_describe(const uint8_t *texture_chunk, size_t texture_size,
         const uint8_t *command = state_chunk + state_start + index * 8;
         if (command[0] == 0xF5) {
             tile_w0 = read_be_u32(command);
+            tile_w1 = read_be_u32(command + 4);
             have_tile = true;
         } else if (command[0] == 0xF2) {
             size_w1 = read_be_u32(command + 4);
@@ -102,6 +104,8 @@ bool btga_texture_describe(const uint8_t *texture_chunk, size_t texture_size,
         .height = (uint16_t)((size_w1 & 0xFFF) / 4 + 1),
         .format_id = (uint8_t)((tile_w0 >> 21) & 7),
         .size_id = (uint8_t)((tile_w0 >> 19) & 3),
+        .u_address_mode = (uint8_t)((tile_w1 >> 8) & 3),
+        .v_address_mode = (uint8_t)((tile_w1 >> 18) & 3),
         .has_palette = image_count > 1,
     };
     return info->width != 0 && info->height != 0 && info->image_offset < texture_size;

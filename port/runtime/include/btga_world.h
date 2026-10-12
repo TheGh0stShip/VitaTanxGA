@@ -32,6 +32,11 @@ typedef struct BtgaWorldBounds {
     int16_t max_z;
 } BtgaWorldBounds;
 
+typedef struct BtgaWorldSpawn {
+    int16_t x, y, z;
+    uint16_t yaw;
+} BtgaWorldSpawn;
+
 bool btga_world_validate(const BtgaWorldComponents *components,
                          BtgaWorldSummary *summary);
 uint32_t btga_read_be_u32(const uint8_t bytes[4]);
@@ -39,5 +44,7 @@ bool btga_world_bounds(const BtgaWorldComponents *components,
                        BtgaWorldBounds *bounds);
 bool btga_common_model_index(const BtgaWorldComponents *components,
                              uint16_t model_id, uint16_t *model_index);
+bool btga_world_find_spawn(const BtgaWorldComponents *components,
+                           uint8_t row, uint8_t column, BtgaWorldSpawn *spawn);
 
 #endif

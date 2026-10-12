@@ -130,3 +130,26 @@ bool btga_common_model_index(const BtgaWorldComponents *components,
     *model_index = index;
     return true;
 }
+
+bool btga_world_find_spawn(const BtgaWorldComponents *c, uint8_t row,
+                           uint8_t column, BtgaWorldSpawn *spawn) {
+    BtgaWorldSummary summary;
+    uint32_t index;
+    if (spawn == NULL || !btga_world_validate(c, &summary)) return false;
+    for (index = 0; index < summary.placement_count; index++) {
+        const uint8_t *placement = c->placements + index * BTGA_PLACEMENT_SIZE;
+        uint32_t offset = btga_read_be_u32(placement + 8);
+        if (offset <= c->definitions_size && c->definitions_size - offset >= 3 &&
+            c->definitions[offset] == 6 && c->definitions[offset + 1] == row &&
+            c->definitions[offset + 2] == column) {
+            *spawn = (BtgaWorldSpawn){
+                (int16_t)read_be_u16(placement),
+                (int16_t)read_be_u16(placement + 2),
+                (int16_t)read_be_u16(placement + 4),
+                read_be_u16(placement + 6),
+            };
+            return true;
+        }
+    }
+    return false;
+}

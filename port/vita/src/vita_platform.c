@@ -2,6 +2,7 @@
 #include "btga_scene.h"
 #include "btga_material.h"
 #include "btga_texture.h"
+#include "btga_tank.h"
 
 #include <psp2/ctrl.h>
 #include <psp2/kernel/processmgr.h>
@@ -31,13 +32,17 @@ typedef struct LoadedFile {
 
 static LoadedFile s_world_files[7];
 static LoadedFile s_common_files[7];
+static LoadedFile s_spawn_files[7];
+static LoadedFile s_gameplay_data;
 static LoadedFile s_geometry_pool;
 static LoadedFile s_state_pool;
 static LoadedFile s_texture_pool;
 static BtgaWorldComponents s_world_components;
 static BtgaWorldComponents s_common_components;
+static BtgaWorldComponents s_spawn_components;
 static BtgaTerrain s_terrain;
-static uint16_t s_player_model_index;
+static BtgaTankDefinition s_player_tank;
+static uint16_t s_player_model_indices[BTGA_TANK_MAX_RENDER_PARTS];
 
 enum { kMaximumProjectedTriangles = 2048, kMaximumTextureCache = 128 };
 
@@ -50,11 +55,21 @@ typedef struct CachedTexture {
     vita2d_texture *texture;
 } CachedTexture;
 
+static SceGxmTextureAddrMode texture_address_mode(uint8_t mode) {
+    switch (mode) {
+        case 1: return SCE_GXM_TEXTURE_ADDR_MIRROR;
+        case 2: return SCE_GXM_TEXTURE_ADDR_CLAMP;
+        case 3: return SCE_GXM_TEXTURE_ADDR_MIRROR_CLAMP;
+        default: return SCE_GXM_TEXTURE_ADDR_REPEAT;
+    }
+}
+
 typedef struct ProjectedTriangle {
     vita2d_color_vertex vertices[3];
     vita2d_texture_vertex texture_vertices[3];
     const CachedTexture *texture;
     float depth;
+    bool actor;
 } ProjectedTriangle;
 
 typedef struct DrawSceneContext {
@@ -69,6 +84,7 @@ typedef struct DrawSceneContext {
     uint32_t texture_size;
     uint32_t texture_state_offset;
     uint32_t texture_state_size;
+    bool actor;
 } DrawSceneContext;
 
 static ProjectedTriangle s_projected_triangles[kMaximumProjectedTriangles];
@@ -132,6 +148,10 @@ static bool cache_texture(uint32_t texture_offset, uint32_t texture_size,
                cached->info.width * sizeof(*pixels));
     vita2d_texture_set_filters(cached->texture, SCE_GXM_TEXTURE_FILTER_LINEAR,
                                SCE_GXM_TEXTURE_FILTER_LINEAR);
+    sceGxmTextureSetUAddrMode(&cached->texture->gxm_tex,
+                             texture_address_mode(cached->info.u_address_mode));
+    sceGxmTextureSetVAddrMode(&cached->texture->gxm_tex,
+                             texture_address_mode(cached->info.v_address_mode));
     free(pixels);
     cached->texture_offset = texture_offset;
     cached->texture_size = texture_size;
@@ -222,16 +242,27 @@ static bool load_first_world(void) {
         "app0:assets/worlds/common_world/component5.bin",
         "app0:assets/worlds/common_world/component6.bin",
     };
+    static const char *const spawn_paths[7] = {
+        "app0:assets/worlds/level_world_001/component0.bin",
+        "app0:assets/worlds/level_world_001/component1.bin",
+        "app0:assets/worlds/level_world_001/component2.bin",
+        "app0:assets/worlds/level_world_001/component3.bin",
+        "app0:assets/worlds/level_world_001/component4.bin",
+        "app0:assets/worlds/level_world_001/component5.bin",
+        "app0:assets/worlds/level_world_001/component6.bin",
+    };
     bool valid = false;
     unsigned int index;
 
     for (index = 0; index < 7; index++) {
         if (!load_file(paths[index], &s_world_files[index]) ||
-            !load_file(common_paths[index], &s_common_files[index])) goto cleanup;
+            !load_file(common_paths[index], &s_common_files[index]) ||
+            !load_file(spawn_paths[index], &s_spawn_files[index])) goto cleanup;
     }
     if (!load_file("app0:assets/world-pools/geometry.bin", &s_geometry_pool) ||
         !load_file("app0:assets/world-pools/state.bin", &s_state_pool) ||
         !load_file("app0:assets/world-pools/texture.bin", &s_texture_pool) ||
+        !load_file("app0:assets/gameplay/gameplay.bin", &s_gameplay_data) ||
         s_world_files[0].size != 4) goto cleanup;
     s_world_components = (BtgaWorldComponents){
         s_world_files[1].data, s_world_files[1].size,
@@ -252,6 +283,16 @@ static bool load_first_world(void) {
         s_common_files[6].data, s_common_files[6].size,
         btga_read_be_u32(s_common_files[0].data),
     };
+    if (s_spawn_files[0].size != 4) goto cleanup;
+    s_spawn_components = (BtgaWorldComponents){
+        s_spawn_files[1].data, s_spawn_files[1].size,
+        s_spawn_files[2].data, s_spawn_files[2].size,
+        s_spawn_files[3].data, s_spawn_files[3].size,
+        s_spawn_files[4].data, s_spawn_files[4].size,
+        s_spawn_files[5].data, s_spawn_files[5].size,
+        s_spawn_files[6].data, s_spawn_files[6].size,
+        btga_read_be_u32(s_spawn_files[0].data),
+    };
     valid = btga_world_validate(&s_world_components, &s_world_summary);
     if (valid) {
         BtgaWorldBounds bounds;
@@ -259,10 +300,15 @@ static bool load_first_world(void) {
                 btga_terrain_build(&s_world_components, s_geometry_pool.data,
                                    s_geometry_pool.size, &bounds, &s_terrain) &&
                 build_texture_cache() &&
-                btga_common_model_index(&s_common_components, 0,
-                                        &s_player_model_index) &&
-                cache_model_textures(&s_common_components,
-                                     s_player_model_index, 0);
+                btga_tank_definition(s_gameplay_data.data, s_gameplay_data.size,
+                                     0, &s_player_tank);
+        for (index = 0; valid && index < s_player_tank.part_count; index++) {
+            valid = btga_common_model_index(&s_common_components,
+                                            s_player_tank.parts[index].model_id,
+                                            &s_player_model_indices[index]) &&
+                    cache_model_textures(&s_common_components,
+                                         s_player_model_indices[index], 0);
+        }
     }
     if (valid) return true;
 cleanup:
@@ -274,6 +320,8 @@ cleanup:
         s_world_files[index] = (LoadedFile){0};
         free(s_common_files[index].data);
         s_common_files[index] = (LoadedFile){0};
+        free(s_spawn_files[index].data);
+        s_spawn_files[index] = (LoadedFile){0};
     }
     free(s_geometry_pool.data);
     s_geometry_pool = (LoadedFile){0};
@@ -281,6 +329,8 @@ cleanup:
     s_state_pool = (LoadedFile){0};
     free(s_texture_pool.data);
     s_texture_pool = (LoadedFile){0};
+    free(s_gameplay_data.data);
+    s_gameplay_data = (LoadedFile){0};
     return valid;
 }
 
@@ -307,6 +357,7 @@ static bool draw_world_triangle(const BtgaPlacedTriangle *triangle, void *contex
         (projected[0].y > 1.2f && projected[1].y > 1.2f && projected[2].y > 1.2f)) return true;
     output = &s_projected_triangles[draw->count++];
     output->depth = depth / 3.0f;
+    output->actor = draw->actor;
     if (!draw->material_cached || draw->state_offset != triangle->state_offset ||
         draw->state_size != triangle->state_size) {
         draw->state_offset = triangle->state_offset;
@@ -362,14 +413,12 @@ static bool draw_world_triangle(const BtgaPlacedTriangle *triangle, void *contex
 static int compare_triangle_depth(const void *left, const void *right) {
     const ProjectedTriangle *a = left;
     const ProjectedTriangle *b = right;
-    if (a->texture == NULL && b->texture != NULL) return -1;
-    if (a->texture != NULL && b->texture == NULL) return 1;
-    if (a->texture != NULL && b->texture != NULL) {
-        if (a->texture->texture_offset < b->texture->texture_offset) return -1;
-        if (a->texture->texture_offset > b->texture->texture_offset) return 1;
-        if (a->texture->state_offset < b->texture->state_offset) return -1;
-        if (a->texture->state_offset > b->texture->state_offset) return 1;
-    }
+    /* Keep the vehicle above intersecting coarse terrain triangles until the
+     * port replaces this immediate renderer with a GXM depth buffer. */
+    if (a->actor != b->actor) return a->actor ? 1 : -1;
+    /* vita2d's immediate path has no per-triangle depth buffer here.  Keep
+     * painter order authoritative; grouping by texture hid nearby vehicles
+     * behind farther terrain whenever their texture keys sorted first. */
     return a->depth < b->depth ? 1 : a->depth > b->depth ? -1 : 0;
 }
 
@@ -377,18 +426,27 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
     DrawSceneContext draw = {0};
     BtgaSceneSummary scene;
     uint32_t tank_triangles;
+    uint32_t tank_part;
     uint32_t triangle_index;
-    float turn = fmodf(runtime->player.yaw, 6.28318530718f);
-    uint16_t yaw;
-    if (turn < 0.0f) turn += 6.28318530718f;
-    yaw = (uint16_t)(turn * (65536.0f / 6.28318530718f));
     if (!btga_projector_init(&runtime->camera, 960.0f / 544.0f, 37.0f, 16.0f,
-                             &draw.projector) ||
-        !btga_model_visit(&s_common_components, s_player_model_index, 0,
-                          runtime->player.x, runtime->player.y, runtime->player.z,
-                          yaw, s_geometry_pool.data, s_geometry_pool.size,
-                          1000, draw_world_triangle, &draw, &tank_triangles) ||
-        !btga_scene_visit(&s_world_components, s_geometry_pool.data,
+                             &draw.projector)) return 0;
+    draw.actor = true;
+    for (tank_part = 0; tank_part < s_player_tank.part_count; tank_part++) {
+        float part_turn = runtime->player.yaw;
+        uint16_t part_yaw;
+        if (s_player_tank.parts[tank_part].turret_transform)
+            part_turn += runtime->player.turret_yaw;
+        part_turn = fmodf(part_turn, 6.28318530718f);
+        if (part_turn < 0.0f) part_turn += 6.28318530718f;
+        part_yaw = (uint16_t)(part_turn * (65536.0f / 6.28318530718f));
+        if (!btga_model_visit(&s_common_components,
+                              s_player_model_indices[tank_part], 0,
+                              runtime->player.x, runtime->player.y, runtime->player.z,
+                              part_yaw, s_geometry_pool.data, s_geometry_pool.size,
+                              1000, draw_world_triangle, &draw, &tank_triangles)) return 0;
+    }
+    draw.actor = false;
+    if (!btga_scene_visit(&s_world_components, s_geometry_pool.data,
                           s_geometry_pool.size, 5000, draw_world_triangle,
                           &draw, &scene)) return 0;
     qsort(s_projected_triangles, draw.count, sizeof(s_projected_triangles[0]),
@@ -475,6 +533,10 @@ bool vita_platform_world_bounds(BtgaWorldBounds *bounds) {
 
 const BtgaTerrain *vita_platform_terrain(void) {
     return s_world_ready ? &s_terrain : NULL;
+}
+
+bool vita_platform_player_spawn(BtgaWorldSpawn *spawn) {
+    return s_world_ready && btga_world_find_spawn(&s_spawn_components, 0, 0, spawn);
 }
 
 static bool project_to_screen(const BtgaProjector *projector, float x, float y,
@@ -585,6 +647,8 @@ void vita_platform_shutdown(void) {
         s_world_files[index] = (LoadedFile){0};
         free(s_common_files[index].data);
         s_common_files[index] = (LoadedFile){0};
+        free(s_spawn_files[index].data);
+        s_spawn_files[index] = (LoadedFile){0};
     }
     free(s_geometry_pool.data);
     s_geometry_pool = (LoadedFile){0};
@@ -595,5 +659,7 @@ void vita_platform_shutdown(void) {
     s_texture_cache_count = 0;
     free(s_texture_pool.data);
     s_texture_pool = (LoadedFile){0};
+    free(s_gameplay_data.data);
+    s_gameplay_data = (LoadedFile){0};
     vita2d_fini();
 }

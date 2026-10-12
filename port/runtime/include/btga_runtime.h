@@ -86,6 +86,8 @@ void btga_runtime_init(BtgaRuntime *runtime, bool assets_ready);
 void btga_runtime_set_world_bounds(BtgaRuntime *runtime, float min_x, float min_z,
                                    float max_x, float max_z);
 void btga_runtime_set_terrain(BtgaRuntime *runtime, const BtgaTerrain *terrain);
+void btga_runtime_set_player_spawn(BtgaRuntime *runtime, float x, float y,
+                                   float z, uint16_t yaw);
 void btga_runtime_update(BtgaRuntime *runtime, const BtgaInput *input,
                          uint32_t elapsed_us);
 

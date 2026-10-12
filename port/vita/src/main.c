@@ -3,6 +3,7 @@
 int main(void) {
     BtgaRuntime runtime;
     BtgaWorldBounds bounds;
+    BtgaWorldSpawn spawn;
     uint64_t previous_time;
 
     if (!vita_platform_startup()) {
@@ -14,6 +15,10 @@ int main(void) {
                                       bounds.max_x, bounds.max_z);
     }
     btga_runtime_set_terrain(&runtime, vita_platform_terrain());
+    if (vita_platform_player_spawn(&spawn)) {
+        btga_runtime_set_player_spawn(&runtime, spawn.x, spawn.y, spawn.z, spawn.yaw);
+        btga_runtime_set_terrain(&runtime, vita_platform_terrain());
+    }
     previous_time = vita_platform_now_us();
 
     while (runtime.running) {
