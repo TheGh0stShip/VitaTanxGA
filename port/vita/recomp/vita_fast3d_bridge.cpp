@@ -786,15 +786,8 @@ void* Fast3DMemoryBridge::TranslateList(u32 address, GBIVersion& version, u32 de
                 if (nextRequired > stagedRequired) stagedRequired = nextRequired;
             }
 
-            // Fast3D decodes staged bytes in logical N64 order. Stage complete
-            // source rows so the TMEM odd-row word swap is also preserved for
-            // IA4 menu/font atlases.
-            const u64 stagedRows = (stagedRequired + fullLineBytes - 1) / fullLineBytes;
-            stagedRequired = stagedRows * fullLineBytes;
-            const u8 swizzleGroup = siz == G_IM_SIZ_32b ? 16 : 8;
             if (stagedRequired > 0xFFFFFFFFu ||
-                !StageTextureImage((u32)stagedRequired, false, 0,
-                                   fullLineBytes, swizzleGroup)) return fail();
+                !StageTextureImage((u32)stagedRequired)) return fail();
             emitTextureSetImg = true;
         }
 
