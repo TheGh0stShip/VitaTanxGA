@@ -16,6 +16,8 @@ int main(void) {
     btga_runtime_init(&runtime, true);
     assert(runtime.running);
     assert(runtime.screen == BTGA_SCREEN_TITLE);
+    assert(btga_runtime_add_enemy(&runtime, 100.0f, 0.0f, 200.0f, 0));
+    assert(runtime.enemies[0].active && runtime.enemies[0].health == 100);
 
     btga_runtime_update(&runtime, &input, BTGA_SIMULATION_STEP_US * 2);
     assert(runtime.simulation_ticks == 2);

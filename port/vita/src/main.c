@@ -15,10 +15,12 @@ int main(void) {
                                       bounds.max_x, bounds.max_z);
     }
     btga_runtime_set_terrain(&runtime, vita_platform_terrain());
-    if (vita_platform_player_spawn(&spawn)) {
+    if (vita_platform_spawn(0, 0, &spawn)) {
         btga_runtime_set_player_spawn(&runtime, spawn.x, spawn.y, spawn.z, spawn.yaw);
         btga_runtime_set_terrain(&runtime, vita_platform_terrain());
     }
+    if (vita_platform_spawn(1, 0, &spawn))
+        btga_runtime_add_enemy(&runtime, spawn.x, spawn.y, spawn.z, spawn.yaw);
     previous_time = vita_platform_now_us();
 
     while (runtime.running) {

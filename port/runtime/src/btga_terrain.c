@@ -47,8 +47,11 @@ static bool rasterize_triangle(const BtgaPlacedTriangle *triangle, void *opaque)
             if (a < -0.001f || b < -0.001f || c < -0.001f) continue;
             y = a * world[0][1] + b * world[1][1] + c * world[2][1];
             cell = &terrain->heights[row * BTGA_TERRAIN_WIDTH + column];
-            if (*cell == -FLT_MAX) terrain->populated_cell_count++;
-            if (y > *cell) *cell = y;
+            if (*cell == FLT_MAX) terrain->populated_cell_count++;
+            /* This recovered level's vehicle spawns are defined at y=0.
+             * World geometry also contains roofs and underground faces, so
+             * retain the surface closest to that gameplay datum. */
+            if (*cell == FLT_MAX || fabsf(y) < fabsf(*cell)) *cell = y;
         }
     }
     return true;
@@ -68,7 +71,7 @@ bool btga_terrain_build(const BtgaWorldComponents *world,
         .max_z = bounds->max_z,
     };
     for (index = 0; index < BTGA_TERRAIN_WIDTH * BTGA_TERRAIN_HEIGHT; index++)
-        terrain->heights[index] = -FLT_MAX;
+        terrain->heights[index] = FLT_MAX;
     if (!btga_scene_visit(world, geometry_pool, geometry_pool_size, UINT32_MAX,
                           rasterize_triangle, terrain, &summary)) return false;
     return terrain->populated_cell_count != 0;
@@ -98,7 +101,7 @@ bool btga_terrain_height(const BtgaTerrain *terrain, float x, float z,
                 float value;
                 if (column < 0 || column >= BTGA_TERRAIN_WIDTH) continue;
                 value = terrain->heights[row * BTGA_TERRAIN_WIDTH + column];
-                if (value != -FLT_MAX) {
+                if (value != FLT_MAX) {
                     *height = value;
                     return true;
                 }

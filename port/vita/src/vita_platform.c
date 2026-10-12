@@ -389,14 +389,17 @@ static bool draw_world_triangle(const BtgaPlacedTriangle *triangle, void *contex
     }
     output->texture = draw->texture;
     for (index = 0; index < 3; index++) {
+        float normalized_depth = projected[index].depth / 20000.0f;
+        if (normalized_depth < 0.0f) normalized_depth = 0.0f;
+        if (normalized_depth > 1.0f) normalized_depth = 1.0f;
         output->vertices[index] = (vita2d_color_vertex){
             (projected[index].x + 1.0f) * 480.0f,
             (1.0f - projected[index].y) * 272.0f,
-            0.5f,
+            normalized_depth,
             RGBA8(red, green, blue, 255),
         };
         output->texture_vertices[index] = (vita2d_texture_vertex){
-            output->vertices[index].x, output->vertices[index].y, 0.5f,
+            output->vertices[index].x, output->vertices[index].y, normalized_depth,
             output->texture != NULL
                 ? (float)triangle->vertices[index].s /
                       (32.0f * output->texture->info.width)
@@ -427,9 +430,14 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
     BtgaSceneSummary scene;
     uint32_t tank_triangles;
     uint32_t tank_part;
+    uint32_t enemy_index;
     uint32_t triangle_index;
     if (!btga_projector_init(&runtime->camera, 960.0f / 544.0f, 37.0f, 16.0f,
                              &draw.projector)) return 0;
+    sceGxmSetFrontDepthFunc(vita2d_get_context(), SCE_GXM_DEPTH_FUNC_LESS_EQUAL);
+    sceGxmSetBackDepthFunc(vita2d_get_context(), SCE_GXM_DEPTH_FUNC_LESS_EQUAL);
+    sceGxmSetFrontDepthWriteEnable(vita2d_get_context(), SCE_GXM_DEPTH_WRITE_ENABLED);
+    sceGxmSetBackDepthWriteEnable(vita2d_get_context(), SCE_GXM_DEPTH_WRITE_ENABLED);
     draw.actor = true;
     for (tank_part = 0; tank_part < s_player_tank.part_count; tank_part++) {
         float part_turn = runtime->player.yaw;
@@ -444,6 +452,22 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
                               runtime->player.x, runtime->player.y, runtime->player.z,
                               part_yaw, s_geometry_pool.data, s_geometry_pool.size,
                               1000, draw_world_triangle, &draw, &tank_triangles)) return 0;
+    }
+    for (enemy_index = 0; enemy_index < BTGA_MAX_ENEMIES; enemy_index++) {
+        const BtgaEnemy *enemy = &runtime->enemies[enemy_index];
+        if (!enemy->active) continue;
+        for (tank_part = 0; tank_part < s_player_tank.part_count; tank_part++) {
+            float part_turn = fmodf(enemy->yaw, 6.28318530718f);
+            uint16_t part_yaw;
+            if (part_turn < 0.0f) part_turn += 6.28318530718f;
+            part_yaw = (uint16_t)(part_turn * (65536.0f / 6.28318530718f));
+            if (!btga_model_visit(&s_common_components,
+                                  s_player_model_indices[tank_part], 0,
+                                  enemy->x, enemy->y, enemy->z, part_yaw,
+                                  s_geometry_pool.data, s_geometry_pool.size,
+                                  1000, draw_world_triangle, &draw,
+                                  &tank_triangles)) return 0;
+        }
     }
     draw.actor = false;
     if (!btga_scene_visit(&s_world_components, s_geometry_pool.data,
@@ -477,6 +501,10 @@ static uint32_t draw_world(const BtgaRuntime *runtime) {
             vita2d_draw_array(SCE_GXM_PRIMITIVE_TRIANGLES, s_draw_vertices,
                               group_count * 3);
     }
+    sceGxmSetFrontDepthFunc(vita2d_get_context(), SCE_GXM_DEPTH_FUNC_ALWAYS);
+    sceGxmSetBackDepthFunc(vita2d_get_context(), SCE_GXM_DEPTH_FUNC_ALWAYS);
+    sceGxmSetFrontDepthWriteEnable(vita2d_get_context(), SCE_GXM_DEPTH_WRITE_DISABLED);
+    sceGxmSetBackDepthWriteEnable(vita2d_get_context(), SCE_GXM_DEPTH_WRITE_DISABLED);
     return draw.count;
 }
 
@@ -535,8 +563,8 @@ const BtgaTerrain *vita_platform_terrain(void) {
     return s_world_ready ? &s_terrain : NULL;
 }
 
-bool vita_platform_player_spawn(BtgaWorldSpawn *spawn) {
-    return s_world_ready && btga_world_find_spawn(&s_spawn_components, 0, 0, spawn);
+bool vita_platform_spawn(uint8_t row, uint8_t column, BtgaWorldSpawn *spawn) {
+    return s_world_ready && btga_world_find_spawn(&s_spawn_components, row, column, spawn);
 }
 
 static bool project_to_screen(const BtgaProjector *projector, float x, float y,
@@ -590,7 +618,15 @@ void vita_platform_poll_input(BtgaInput *input) {
 
 void vita_platform_begin_frame(void) {
     vita2d_start_drawing();
+    /* vita2d's clear pass only clears depth when depth writes are enabled.
+     * Clear to the shader's far-plane value before the 3D world pass. */
+    sceGxmSetFrontDepthFunc(vita2d_get_context(), SCE_GXM_DEPTH_FUNC_ALWAYS);
+    sceGxmSetBackDepthFunc(vita2d_get_context(), SCE_GXM_DEPTH_FUNC_ALWAYS);
+    sceGxmSetFrontDepthWriteEnable(vita2d_get_context(), SCE_GXM_DEPTH_WRITE_ENABLED);
+    sceGxmSetBackDepthWriteEnable(vita2d_get_context(), SCE_GXM_DEPTH_WRITE_ENABLED);
     vita2d_clear_screen();
+    sceGxmSetFrontDepthWriteEnable(vita2d_get_context(), SCE_GXM_DEPTH_WRITE_DISABLED);
+    sceGxmSetBackDepthWriteEnable(vita2d_get_context(), SCE_GXM_DEPTH_WRITE_DISABLED);
 }
 
 void vita_platform_draw(const BtgaRuntime *runtime) {

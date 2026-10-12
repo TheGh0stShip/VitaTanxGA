@@ -55,10 +55,20 @@ typedef struct BtgaProjectile {
     float velocity_x;
     float velocity_z;
     uint16_t lifetime;
+    uint8_t owner;
     bool active;
 } BtgaProjectile;
 
-enum { BTGA_MAX_PROJECTILES = 32 };
+typedef struct BtgaEnemy {
+    float x, y, z;
+    float yaw;
+    float velocity;
+    uint16_t health;
+    uint16_t fire_cooldown;
+    bool active;
+} BtgaEnemy;
+
+enum { BTGA_MAX_PROJECTILES = 32, BTGA_MAX_ENEMIES = 8 };
 
 typedef struct BtgaRuntime {
     uint64_t simulation_ticks;
@@ -67,6 +77,7 @@ typedef struct BtgaRuntime {
     BtgaCamera camera;
     BtgaPlayer player;
     BtgaProjectile projectiles[BTGA_MAX_PROJECTILES];
+    BtgaEnemy enemies[BTGA_MAX_ENEMIES];
     const BtgaTerrain *terrain;
     float world_min_x;
     float world_min_z;
@@ -88,6 +99,8 @@ void btga_runtime_set_world_bounds(BtgaRuntime *runtime, float min_x, float min_
 void btga_runtime_set_terrain(BtgaRuntime *runtime, const BtgaTerrain *terrain);
 void btga_runtime_set_player_spawn(BtgaRuntime *runtime, float x, float y,
                                    float z, uint16_t yaw);
+bool btga_runtime_add_enemy(BtgaRuntime *runtime, float x, float y, float z,
+                            uint16_t yaw);
 void btga_runtime_update(BtgaRuntime *runtime, const BtgaInput *input,
                          uint32_t elapsed_us);
 

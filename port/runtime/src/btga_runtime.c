@@ -14,23 +14,66 @@ static float clampf(float value, float minimum, float maximum) {
     return value;
 }
 
-static void spawn_projectile(BtgaRuntime *runtime) {
-    float heading = runtime->player.yaw + runtime->player.turret_yaw;
+static void spawn_projectile(BtgaRuntime *runtime, float x, float y, float z,
+                             float heading, uint8_t owner) {
     unsigned int index;
-    if (runtime->player.ammo == 0 || runtime->player.fire_cooldown != 0) return;
+    if (owner == 0 &&
+        (runtime->player.ammo == 0 || runtime->player.fire_cooldown != 0)) return;
     for (index = 0; index < BTGA_MAX_PROJECTILES; index++) {
         BtgaProjectile *projectile = &runtime->projectiles[index];
         if (projectile->active) continue;
-        projectile->x = runtime->player.x + sinf(heading) * 55.0f;
-        projectile->y = runtime->player.y + 35.0f;
-        projectile->z = runtime->player.z + cosf(heading) * 55.0f;
+        projectile->x = x + sinf(heading) * 55.0f;
+        projectile->y = y + 35.0f;
+        projectile->z = z + cosf(heading) * 55.0f;
         projectile->velocity_x = sinf(heading) * 95.0f;
         projectile->velocity_z = cosf(heading) * 95.0f;
         projectile->lifetime = 75;
+        projectile->owner = owner;
         projectile->active = true;
-        runtime->player.ammo--;
-        runtime->player.fire_cooldown = 8;
+        if (owner == 0) {
+            runtime->player.ammo--;
+            runtime->player.fire_cooldown = 8;
+        }
         return;
+    }
+}
+
+static float angle_delta(float target, float current) {
+    float delta = fmodf(target - current, 6.28318530718f);
+    if (delta > 3.14159265359f) delta -= 6.28318530718f;
+    if (delta < -3.14159265359f) delta += 6.28318530718f;
+    return delta;
+}
+
+static void update_enemies(BtgaRuntime *runtime) {
+    unsigned int index;
+    for (index = 0; index < BTGA_MAX_ENEMIES; index++) {
+        BtgaEnemy *enemy = &runtime->enemies[index];
+        float dx, dz, distance, target_yaw, turn;
+        if (!enemy->active) continue;
+        dx = runtime->player.x - enemy->x;
+        dz = runtime->player.z - enemy->z;
+        distance = sqrtf(dx * dx + dz * dz);
+        target_yaw = atan2f(dx, dz);
+        turn = clampf(angle_delta(target_yaw, enemy->yaw), -0.035f, 0.035f);
+        enemy->yaw += turn;
+        enemy->velocity += ((distance > 420.0f ? 20.0f : 0.0f) - enemy->velocity) * 0.1f;
+        enemy->x += sinf(enemy->yaw) * enemy->velocity;
+        enemy->z += cosf(enemy->yaw) * enemy->velocity;
+        enemy->x = clampf(enemy->x, runtime->world_min_x, runtime->world_max_x);
+        enemy->z = clampf(enemy->z, runtime->world_min_z, runtime->world_max_z);
+        if (runtime->terrain != NULL) {
+            float height;
+            if (btga_terrain_height(runtime->terrain, enemy->x, enemy->z, &height))
+                enemy->y = height;
+        }
+        if (enemy->fire_cooldown != 0) enemy->fire_cooldown--;
+        if (distance < 1400.0f && fabsf(angle_delta(target_yaw, enemy->yaw)) < 0.12f &&
+            enemy->fire_cooldown == 0) {
+            spawn_projectile(runtime, enemy->x, enemy->y, enemy->z,
+                             enemy->yaw, (uint8_t)(index + 1));
+            enemy->fire_cooldown = 45;
+        }
     }
 }
 
@@ -58,12 +101,39 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
                                 &terrain_height)) runtime->player.y = terrain_height;
     }
     if (runtime->player.fire_cooldown != 0) runtime->player.fire_cooldown--;
-    if ((pressed & BTGA_BUTTON_FIRE) != 0) spawn_projectile(runtime);
+    if ((pressed & BTGA_BUTTON_FIRE) != 0)
+        spawn_projectile(runtime, runtime->player.x, runtime->player.y,
+                         runtime->player.z,
+                         runtime->player.yaw + runtime->player.turret_yaw, 0);
+    update_enemies(runtime);
     for (index = 0; index < BTGA_MAX_PROJECTILES; index++) {
         BtgaProjectile *projectile = &runtime->projectiles[index];
         if (!projectile->active) continue;
         projectile->x += projectile->velocity_x;
         projectile->z += projectile->velocity_z;
+        if (projectile->owner == 0) {
+            unsigned int enemy_index;
+            for (enemy_index = 0; enemy_index < BTGA_MAX_ENEMIES; enemy_index++) {
+                BtgaEnemy *enemy = &runtime->enemies[enemy_index];
+                float dx = projectile->x - enemy->x;
+                float dz = projectile->z - enemy->z;
+                if (enemy->active && dx * dx + dz * dz < 2500.0f) {
+                    enemy->health = enemy->health > 25 ? enemy->health - 25 : 0;
+                    if (enemy->health == 0) enemy->active = false;
+                    projectile->active = false;
+                    break;
+                }
+            }
+        } else {
+            float dx = projectile->x - runtime->player.x;
+            float dz = projectile->z - runtime->player.z;
+            if (dx * dx + dz * dz < 2500.0f) {
+                runtime->player.health = runtime->player.health > 10
+                    ? runtime->player.health - 10 : 0;
+                projectile->active = false;
+            }
+        }
+        if (!projectile->active) continue;
         if (--projectile->lifetime == 0 || projectile->x < runtime->world_min_x ||
             projectile->x > runtime->world_max_x || projectile->z < runtime->world_min_z ||
             projectile->z > runtime->world_max_z) projectile->active = false;
@@ -76,6 +146,21 @@ static void update_gameplay(BtgaRuntime *runtime, const BtgaInput *input,
     runtime->camera.z += (follow_z - runtime->camera.z) * 0.18f;
     runtime->camera.yaw = runtime->player.yaw;
     runtime->camera.pitch = -0.42f;
+}
+
+bool btga_runtime_add_enemy(BtgaRuntime *runtime, float x, float y, float z,
+                            uint16_t yaw) {
+    unsigned int index;
+    if (runtime == NULL) return false;
+    for (index = 0; index < BTGA_MAX_ENEMIES; index++) {
+        if (runtime->enemies[index].active) continue;
+        runtime->enemies[index] = (BtgaEnemy){
+            x, y, z, (float)yaw * (6.28318530718f / 65536.0f),
+            0.0f, 100, 30, true
+        };
+        return true;
+    }
+    return false;
 }
 
 void btga_runtime_set_terrain(BtgaRuntime *runtime, const BtgaTerrain *terrain) {

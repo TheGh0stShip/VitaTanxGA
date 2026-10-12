@@ -23,7 +23,7 @@ bool vita_platform_assets_ready(void);
 const BtgaWorldSummary *vita_platform_world_summary(void);
 bool vita_platform_world_bounds(BtgaWorldBounds *bounds);
 const BtgaTerrain *vita_platform_terrain(void);
-bool vita_platform_player_spawn(BtgaWorldSpawn *spawn);
+bool vita_platform_spawn(uint8_t row, uint8_t column, BtgaWorldSpawn *spawn);
 uint64_t vita_platform_now_us(void);
 void vita_platform_poll_input(BtgaInput *input);
 void vita_platform_begin_frame(void);
